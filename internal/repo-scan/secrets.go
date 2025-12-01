@@ -19,7 +19,7 @@ func NewSecretsScanner(repoPath string) *SecretsScanner {
 	}
 }
 
-func (s *SecretsScanner) Scan(ctx context.Context) ([]string, error) {
+func (s *SecretsScanner) Scan(ctx context.Context) ([]Finding, error) {
 	// 1) Load default config (same rules as CLI when no custom config is provided)
 	// NewDetectorDefaultConfig creates a detector with the default ruleset.
 	detector, err := detect.NewDetectorDefaultConfig()
@@ -47,23 +47,27 @@ func (s *SecretsScanner) Scan(ctx context.Context) ([]string, error) {
 	}
 
 	// 3) Convert findings to string slice
-	var results []string
 	fmt.Printf("Gitleaks found %d secrets\n", len(allFindings))
-	for _, f := range allFindings {
-		printFinding(f)
-		results = append(results, fmt.Sprintf("[%s] %s at %s:%d", f.RuleID, f.Description, f.File, f.StartLine))
-	}
+	findings := FromGitleaks(allFindings)
 
-	return results, nil
+	return findings, nil
 }
 
-func printFinding(f report.Finding) {
-	fmt.Printf(
-		"[%s] %s at %s:%d (%s)\n",
-		f.RuleID,
-		f.Description,
-		f.File,
-		f.StartLine,
-		f.Match,
-	)
+func FromGitleaks(findings []report.Finding) []Finding {
+	out := make([]Finding, 0, len(findings))
+
+	for _, f := range findings {
+		out = append(out, Finding{
+			Tool:     "gitleaks",
+			Type:     "secrets",
+			Severity: "high", // treat all secrets as high/error
+			RuleID:   f.RuleID,
+			Title:    f.Description,
+			File:     f.File,
+			Line:     f.StartLine,
+			Message:  f.Description, // avoid empty message
+		})
+	}
+
+	return out
 }

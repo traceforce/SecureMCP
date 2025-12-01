@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -27,7 +28,7 @@ func NewConfigScanCommand() *cobra.Command {
 }
 
 func NewRepoScanCommand() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "repo-scan [repo-path]",
 		Short: "Scan the repository of the MCP server",
 		Args:  cobra.MaximumNArgs(1),
@@ -43,9 +44,27 @@ func NewRepoScanCommand() *cobra.Command {
 				fmt.Println("Error scanning repository:", err)
 				os.Exit(1)
 			}
-			fmt.Println("Findings:", findings)
+			jsonBytes, err := json.MarshalIndent(findings, "", "  ")
+			if err != nil {
+				fmt.Println("Error marshaling findings:", err)
+				os.Exit(1)
+			}
+
+			outputPath, _ := cmd.Flags().GetString("output")
+			if outputPath == "" {
+				outputPath = "findings.json"
+			}
+
+			err = os.WriteFile(outputPath, jsonBytes, 0644)
+			if err != nil {
+				fmt.Printf("Error writing to output file %s: %v\n", outputPath, err)
+				os.Exit(1)
+			}
+			fmt.Printf("Findings written to %s\n", outputPath)
 		},
 	}
+	cmd.Flags().StringP("output", "o", "", "Output file path for scan results (default: findings.json)")
+	return cmd
 }
 
 func init() {

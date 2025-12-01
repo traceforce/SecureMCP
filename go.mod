@@ -4,6 +4,8 @@ go 1.25.4
 
 require (
 	github.com/google/osv-scanner/v2 v2.3.0
+	github.com/ossf/osv-schema/bindings/go v0.0.0-20251112210320-9fb6c8870ac1
+	github.com/pandatix/go-cvss v0.6.2
 	github.com/spf13/cobra v1.10.1
 	github.com/zricethezav/gitleaks/v8 v8.30.0
 )
@@ -144,10 +146,8 @@ require (
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/opencontainers/runtime-spec v1.2.1 // indirect
 	github.com/opencontainers/selinux v1.13.0 // indirect
-	github.com/ossf/osv-schema/bindings/go v0.0.0-20251112210320-9fb6c8870ac1 // indirect
 	github.com/owenrumney/go-sarif/v3 v3.3.0 // indirect
 	github.com/package-url/packageurl-go v0.1.3 // indirect
-	github.com/pandatix/go-cvss v0.6.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pjbgf/sha1cd v0.4.0 // indirect
