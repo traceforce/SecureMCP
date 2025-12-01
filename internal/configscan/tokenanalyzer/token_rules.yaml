@@ -1,0 +1,142 @@
+rules:
+  - id: risky_destructive_commands
+    severity: critical
+    meta:
+      category: risky_commands
+      reason: The tool appears to perform destructive or irreversible operations.
+      title: Destructive Command Detected
+    strings:
+      - name: "$danger_verb"
+        type: tokens
+        values: ["delete", "remove", "destroy", "drop", "purge", "wipe", "truncate", "erase", "deallocate"]
+
+      - name: "$danger_obj"
+        type: tokens
+        values: ["file", "files", "directory", "directories", "folder", "folders", "repo", "repos", "branch", "branches", "record", "records", "collection", "collections", "table", "tables", "resource", "resources", "data", "system"]
+
+    condition:
+      kind: all_near
+      names: ["$danger_verb", "$danger_obj"]
+      window: 6
+
+
+  - id: command_injection
+    severity: high
+    meta:
+      category: command_injection
+      reason: Execution of tool/command based on user-controlled or arbitrary input.
+    strings:
+      - name: "$exec"
+        type: tokens
+        values: ["execute", "executes", "run", "invoke"]
+
+      - name: "$obj"
+        type: tokens
+        values: ["tool", "slug", "command", "commands", "script", "code"]
+
+      - name: "$user"
+        type: tokens
+        values: ["user", "provided", "input", "arguments", "arbitrary", "any"]
+
+      - name: "$p_arbitrary_tool"
+        type: phrase
+        values:
+          - "executes an arbitrary tool slug"
+          - "arbitrary input for the tool slug and arguments"
+
+    condition:
+      kind: all_near
+      names: ["$exec", "$obj", "$user"]
+      window: 8
+
+  - id: unvalidated_user_input
+    severity: medium
+    meta:
+      category: unvalidated_input
+      reason: User-provided data is used directly; requires validation/sanitization.
+    strings:
+      - name: "$user"
+        type: tokens
+        values: ["user", "client"]
+
+      - name: "$prov"
+        type: tokens
+        values: ["provided", "supplied", "submitted"]
+
+      - name: "$data"
+        type: tokens
+        values: ["input", "arguments", "content", "data"]
+
+    condition:
+      kind: all_near
+      names: ["$user", "$prov", "$data"]
+      window: 5
+
+  - id: insecure_permission_assignment
+    severity: medium
+    meta:
+      category: permissions
+      reason: Tool modifies permissions/access for users or collaborators; risk of over-privileged access.
+    strings:
+      - name: "$verb"
+        type: tokens
+        values: ["add", "adds", "update", "updates", "modify", "modifies", "set", "grant"]
+
+      - name: "$perm"
+        type: tokens
+        values: ["permission", "permissions", "access", "privilege", "privileges"]
+
+      - name: "$who"
+        type: tokens
+        values: ["collaborator", "user", "member", "role"]
+
+    condition:
+      kind: all_near
+      names: ["$verb", "$perm", "$who"]
+      window: 6
+
+  - id: active_connection_leak
+    severity: medium
+    meta:
+      category: connection_leak
+      reason: Tool exposes status of active connections; possible information disclosure / unauthorized use.
+    strings:
+      - name: "$check"
+        type: tokens
+        values: ["check", "checks", "verify", "verifies"]
+
+      - name: "$active"
+        type: tokens
+        values: ["active", "existing"]
+
+      - name: "$conn"
+        type: tokens
+        values: ["connection", "connections", "session", "sessions"]
+
+    condition:
+      kind: all_near
+      names: ["$check", "$active", "$conn"]
+      window: 6
+
+  - id: information_disclosure
+    severity: low
+    meta:
+      category: information_disclosure
+      reason: Tool compares commits/repo contents; may expose history or sensitive differences.
+    strings:
+      - name: "$verb"
+        type: tokens
+        values: ["compare", "compares", "diff"]
+
+      - name: "$obj"
+        type: tokens
+        values: ["commit", "commits", "history", "contents"]
+
+      - name: "$ctx"
+        type: tokens
+        values: ["context", "diff", "changes", "difference"]
+
+    condition:
+      kind: all_near
+      names: ["$verb", "$obj"]
+      window: 6

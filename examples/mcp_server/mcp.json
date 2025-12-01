@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "readme-assistant": {
+      "transport": "http",
+      "url": "http://localhost:8000/mcp/",
+      "env": {}
+    }
+  }
+}
+

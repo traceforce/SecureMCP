@@ -1,0 +1,332 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "mcpxray",
+          "version": "1.0.2",
+          "informationUri": "https://github.com/traceforce/mcpxray",
+          "rules": [
+            {
+              "id": "curl_pipe_shell",
+              "shortDescription": {
+                "text": "Remote code execution"
+              }
+            },
+            {
+              "id": "kext_load",
+              "shortDescription": {
+                "text": "System security bypass"
+              }
+            },
+            {
+              "id": "shutdown_reboot",
+              "shortDescription": {
+                "text": "System control"
+              }
+            },
+            {
+              "id": "sudo",
+              "shortDescription": {
+                "text": "Privilege escalation"
+              }
+            },
+            {
+              "id": "doas",
+              "shortDescription": {
+                "text": "Privilege escalation"
+              }
+            },
+            {
+              "id": "pmset",
+              "shortDescription": {
+                "text": "System configuration changes"
+              }
+            },
+            {
+              "id": "scutil",
+              "shortDescription": {
+                "text": "System configuration changes"
+              }
+            },
+            {
+              "id": "killall",
+              "shortDescription": {
+                "text": "Process management"
+              }
+            },
+            {
+              "id": "osascript",
+              "shortDescription": {
+                "text": "System automation"
+              }
+            },
+            {
+              "id": "networksetup",
+              "shortDescription": {
+                "text": "System configuration changes"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "curl_pipe_shell",
+          "level": "error",
+          "message": {
+            "text": "curl | bash"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 70
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        },
+        {
+          "ruleId": "curl_pipe_shell",
+          "level": "error",
+          "message": {
+            "text": "curl|wget)\\b[^\\n]*\\|\\s*\\b(sh|bash|zsh|tcsh"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 114
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        },
+        {
+          "ruleId": "kext_load",
+          "level": "error",
+          "message": {
+            "text": "kextload"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 126
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        },
+        {
+          "ruleId": "killall",
+          "level": "error",
+          "message": {
+            "text": "killall"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 169
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        },
+        {
+          "ruleId": "shutdown_reboot",
+          "level": "error",
+          "message": {
+            "text": "shutdown"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 188
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        },
+        {
+          "ruleId": "pmset",
+          "level": "error",
+          "message": {
+            "text": "pmset"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 261
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        },
+        {
+          "ruleId": "networksetup",
+          "level": "error",
+          "message": {
+            "text": "networksetup"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 267
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        },
+        {
+          "ruleId": "scutil",
+          "level": "error",
+          "message": {
+            "text": "scutil"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 273
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        },
+        {
+          "ruleId": "sudo",
+          "level": "warning",
+          "message": {
+            "text": "sudo"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 207
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        },
+        {
+          "ruleId": "doas",
+          "level": "warning",
+          "message": {
+            "text": "doas"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 213
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        },
+        {
+          "ruleId": "osascript",
+          "level": "warning",
+          "message": {
+            "text": "osascript"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "internal/reposcan/sast.go"
+                },
+                "region": {
+                  "startLine": 237
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "sast",
+            "type": "SAST"
+          }
+        }
+      ]
+    }
+  ]
+}
