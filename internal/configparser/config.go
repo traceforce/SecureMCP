@@ -1,4 +1,4 @@
-package config_parser
+package configparser
 
 import (
 	"encoding/json"
@@ -36,15 +36,14 @@ func (c *ConfigParser) Parse() ([]MCPServerConfig, error) {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	// Cursor supports only one format across config types currently.
 	return ParseConfig(data)
 }
 
-// ParseCursorData parses Cursor MCP config from raw bytes
+// ParseConfig parses MCP config from raw bytes
 func ParseConfig(data []byte) ([]MCPServerConfig, error) {
 	var config RawConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse Cursor config: %w", err)
+		return nil, fmt.Errorf("failed to parse MCP config: %w", err)
 	}
 
 	// Parse raw data once for all servers

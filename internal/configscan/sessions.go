@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"SecureMCP/internal/build"
-	"SecureMCP/internal/config_parser"
+	configparser "SecureMCP/internal/configparser"
 
 	"github.com/cenkalti/backoff/v4"
 )
@@ -61,6 +61,7 @@ func newMCPSession(url string, headers map[string]string) *MCPSession {
 		ExpectContinueTimeout: 1 * time.Second,
 		ForceAttemptHTTP2:     true,
 	}
+
 	return &MCPSession{
 		client: &http.Client{
 			Jar:       jar,
@@ -76,15 +77,50 @@ func httpCacheKey(url string, headers map[string]string) string {
 	return url + "\n" + canonicalizeHeaders(headers)
 }
 
+// hasAccessToken checks if the headers contain an access token
+func hasAccessToken(headers map[string]string) bool {
+	if headers == nil {
+		return false
+	}
+	// Check for "Authorization" key (case-sensitive since map keys are case-sensitive)
+	// HTTP headers are case-insensitive, but we check the common capitalized form
+	if authHeader, ok := headers["Authorization"]; ok && strings.HasPrefix(authHeader, "Bearer ") {
+		return true
+	}
+
+	// Also check lowercase "authorization" in case it was stored that way
+	if authHeader, ok := headers["authorization"]; ok && strings.HasPrefix(authHeader, "Bearer ") {
+		return true
+	}
+
+	return false
+}
+
 // getOrCreateHTTPSession gets or creates a cached HTTP session
-func getOrCreateHTTPSession(url string, headers map[string]string) *MCPSession {
+func getOrCreateHTTPSession(url string, headers map[string]string) (*MCPSession, error) {
+	// Initialize headers map if nil to avoid panics
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+
 	key := httpCacheKey(url, headers)
 	if v, ok := httpSessions.Load(key); ok {
-		return v.(*MCPSession)
+		return v.(*MCPSession), nil
+	}
+
+	// If the headers do not contain an access token, discover it and add it to the headers
+	if !hasAccessToken(headers) {
+		oauthConfig := NewOAuthConfig(url)
+		accessToken, err := oauthConfig.oauthDiscovery()
+		if err == nil && accessToken != "" {
+			headers["Authorization"] = "Bearer " + accessToken
+		}
+		// If we cannot discover the access token, just continue with the existing headers
+		// the the server might not require authentication
 	}
 	s := newMCPSession(url, headers)
 	actual, _ := httpSessions.LoadOrStore(key, s)
-	return actual.(*MCPSession)
+	return actual.(*MCPSession), nil
 }
 
 // canonicalizeHeaders creates canonical string of headers
@@ -108,7 +144,7 @@ func canonicalizeHeaders(h map[string]string) string {
 }
 
 // newMCPStdioSession creates a new STDIO MCP session with retry
-func newMCPStdioSession(ctx context.Context, cfg config_parser.MCPServerConfig, userAccount *UserAccount) (*MCPStdioSession, error) {
+func newMCPStdioSession(ctx context.Context, cfg configparser.MCPServerConfig) (*MCPStdioSession, error) {
 	var session *MCPStdioSession
 
 	bo := backoff.NewExponentialBackOff()
@@ -116,7 +152,7 @@ func newMCPStdioSession(ctx context.Context, cfg config_parser.MCPServerConfig, 
 
 	err := backoff.Retry(func() error {
 		var err error
-		session, err = newMCPStdioSessionOnce(ctx, cfg, userAccount)
+		session, err = newMCPStdioSessionOnce(ctx, cfg)
 		if err != nil {
 			if isStdioRetryable(err) {
 				return err
@@ -130,7 +166,7 @@ func newMCPStdioSession(ctx context.Context, cfg config_parser.MCPServerConfig, 
 }
 
 // newMCPStdioSessionOnce creates a STDIO session
-func newMCPStdioSessionOnce(ctx context.Context, cfg config_parser.MCPServerConfig, userAccount *UserAccount) (*MCPStdioSession, error) {
+func newMCPStdioSessionOnce(ctx context.Context, cfg configparser.MCPServerConfig) (*MCPStdioSession, error) {
 	if cfg.Command == nil {
 		return nil, fmt.Errorf("no command specified for STDIO transport")
 	}
@@ -154,27 +190,9 @@ func newMCPStdioSessionOnce(ctx context.Context, cfg config_parser.MCPServerConf
 
 	// Run command as the user from UserAccount if provided
 	var cmd *exec.Cmd
-	if userAccount != nil && userAccount.Uid != "" {
-		// Use username if available, otherwise fall back to UID with # prefix
-		userIdentifier := userAccount.Username
-		if userIdentifier == "" {
-			userIdentifier = "#" + userAccount.Uid
-		}
+	cmd = exec.CommandContext(sessionCtx, executable, commandArgs...)
 
-		// Build the full command string to pass to the shell
-		// This preserves the original command structure (executable + args)
-		allArgs := append([]string{executable}, commandArgs...)
-		commandStr := strings.Join(allArgs, " ")
-
-		// Launch an interactive shell as the user and execute the command.
-		// Interactive shell ensures the user's environment including PATH is properly set.
-		args := []string{"-iu", userIdentifier, "sh", "-lc", commandStr}
-		cmd = exec.CommandContext(sessionCtx, "/usr/bin/sudo", args...)
-	} else {
-		cmd = exec.CommandContext(sessionCtx, executable, commandArgs...)
-	}
-
-	cmd.Env = os.Environ()
+	// Set environment variables from the config
 	if cfg.Env != nil {
 		for k, v := range cfg.Env {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
@@ -192,6 +210,10 @@ func newMCPStdioSessionOnce(ctx context.Context, cfg config_parser.MCPServerConf
 		cancel()
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
+
+	// Capture stderr to help diagnose process failures
+	stderrBuf := &bytes.Buffer{}
+	cmd.Stderr = stderrBuf
 
 	// Start the process
 	if err := cmd.Start(); err != nil {
@@ -215,6 +237,10 @@ func newMCPStdioSessionOnce(ctx context.Context, cfg config_parser.MCPServerConf
 
 	if err := session.initialize(); err != nil {
 		session.Close()
+		// Include stderr if available to help diagnose EOF issues
+		if stderrBuf.Len() > 0 {
+			return nil, fmt.Errorf("failed to initialize MCP session: %w (stderr: %s)", err, stderrBuf.String())
+		}
 		return nil, fmt.Errorf("failed to initialize MCP session: %w", err)
 	}
 

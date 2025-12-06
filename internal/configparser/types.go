@@ -1,4 +1,4 @@
-package config_parser
+package configparser
 
 // MCPServerConfig is the normalized representation returned by all parsers
 type MCPServerConfig struct {

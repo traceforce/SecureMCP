@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	configscan "SecureMCP/internal/config-scan"
-	reposcan "SecureMCP/internal/repo-scan"
+	configscan "SecureMCP/internal/configscan"
+	reposcan "SecureMCP/internal/reposcan"
 	"SecureMCP/proto"
 
 	"github.com/spf13/cobra"
@@ -31,20 +31,7 @@ func NewConfigScanCommand() *cobra.Command {
 				configPath = args[0]
 			}
 
-			// Parse scanner config from CLI flags
-			uid, _ := cmd.Flags().GetString("uid")
-			username, _ := cmd.Flags().GetString("username")
-
-			scannerConfig := &configscan.ScannerConfig{}
-			if uid != "" && username != "" {
-				userAccount := &configscan.UserAccount{
-					Uid:      uid,
-					Username: username,
-				}
-				scannerConfig = configscan.NewScannerConfig(userAccount)
-			}
-
-			scanner := configscan.NewConfigScanner(configPath, scannerConfig)
+			scanner := configscan.NewConfigScanner(configPath)
 			findings, err := scanner.Scan(context.Background())
 			if err != nil {
 				fmt.Println("Error scanning configuration:", err)
@@ -58,8 +45,6 @@ func NewConfigScanCommand() *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().String("uid", "", "User ID for scanner configuration")
-	cmd.Flags().String("username", "", "Username for scanner configuration")
 	cmd.Flags().StringP("output", "o", "", "Output file path for scan results (default: findings.json)")
 	return cmd
 }

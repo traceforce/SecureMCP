@@ -9,25 +9,23 @@ import (
 	"time"
 
 	"SecureMCP/internal/build"
-	"SecureMCP/internal/config_parser"
+	configparser "SecureMCP/internal/configparser"
 	"SecureMCP/proto"
 )
 
 type ToolsScanner struct {
 	MCPconfigPath string
-	scannerConfig *ScannerConfig
 }
 
-func NewToolsScanner(configPath string, scannerConfig *ScannerConfig) *ToolsScanner {
+func NewToolsScanner(configPath string) *ToolsScanner {
 	return &ToolsScanner{
 		MCPconfigPath: configPath,
-		scannerConfig: scannerConfig,
 	}
 }
 
 func (s *ToolsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 	// Parse configPath
-	servers, err := config_parser.NewConfigParser(s.MCPconfigPath).Parse()
+	servers, err := configparser.NewConfigParser(s.MCPconfigPath).Parse()
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +91,7 @@ type ToolsListResult struct {
 }
 
 // GetTools discovers available tools from an MCP server
-func (s *ToolsScanner) GetTools(ctx context.Context, cfg config_parser.MCPServerConfig) ([]Tool, error) {
+func (s *ToolsScanner) GetTools(ctx context.Context, cfg configparser.MCPServerConfig) ([]Tool, error) {
 	transport := ClassifyTransport(cfg)
 
 	switch transport {
@@ -107,9 +105,9 @@ func (s *ToolsScanner) GetTools(ctx context.Context, cfg config_parser.MCPServer
 }
 
 // getToolsSTDIO gets tools using STDIO transport
-func (s *ToolsScanner) getToolsSTDIO(ctx context.Context, cfg config_parser.MCPServerConfig) ([]Tool, error) {
+func (s *ToolsScanner) getToolsSTDIO(ctx context.Context, cfg configparser.MCPServerConfig) ([]Tool, error) {
 
-	session, err := newMCPStdioSession(ctx, cfg, s.scannerConfig.userAccount)
+	session, err := newMCPStdioSession(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -140,12 +138,15 @@ func (s *ToolsScanner) getToolsSTDIO(ctx context.Context, cfg config_parser.MCPS
 }
 
 // getToolsHTTP gets tools from an MCP server using HTTP transport with universal session management
-func (s *ToolsScanner) getToolsHTTP(ctx context.Context, cfg config_parser.MCPServerConfig) ([]Tool, error) {
+func (s *ToolsScanner) getToolsHTTP(ctx context.Context, cfg configparser.MCPServerConfig) ([]Tool, error) {
 	if cfg.URL == nil {
 		return nil, fmt.Errorf("no URL specified for HTTP transport")
 	}
 
-	session := getOrCreateHTTPSession(*cfg.URL, cfg.Headers)
+	session, err := getOrCreateHTTPSession(*cfg.URL, cfg.Headers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session: %w", err)
+	}
 
 	// Standard MCP flow: initialize first, then tools/list
 	initReq := MCPRequest{
@@ -200,7 +201,7 @@ func (s *ToolsScanner) getToolsHTTP(ctx context.Context, cfg config_parser.MCPSe
 }
 
 // getToolsDirectHTTP tries tools/list without initialize
-func (s *ToolsScanner) getToolsDirectHTTP(ctx context.Context, session *MCPSession, cfg config_parser.MCPServerConfig) ([]Tool, error) {
+func (s *ToolsScanner) getToolsDirectHTTP(ctx context.Context, session *MCPSession, cfg configparser.MCPServerConfig) ([]Tool, error) {
 	toolsReq := MCPRequest{
 		JSONRPC: MCPJSONRPCVersion,
 		Method:  "tools/list",

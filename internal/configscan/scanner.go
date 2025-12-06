@@ -11,15 +11,15 @@ type ConfigScanner struct {
 	toolsScanner *ToolsScanner
 }
 
-func NewConfigScanner(configPath string, scannerConfig *ScannerConfig) *ConfigScanner {
+func NewConfigScanner(configPath string) *ConfigScanner {
 	return &ConfigScanner{
 		configPath:   configPath,
-		toolsScanner: NewToolsScanner(configPath, scannerConfig),
+		toolsScanner: NewToolsScanner(configPath),
 	}
 }
 
 func NewDefaultConfigScanner(configPath string) *ConfigScanner {
-	return NewConfigScanner(configPath, NewScannerConfig(&UserAccount{Uid: "501", Username: "xiahua"}))
+	return NewConfigScanner(configPath)
 }
 
 func (s *ConfigScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
