@@ -72,10 +72,16 @@ type TokenResponse struct {
 
 func (o *OAuthConfig) oauthDiscovery() (string, error) {
 	fmt.Println("1) Discovering Protected Resource Metadata (PRM)…")
-	prm := o.discoverPRM(o.httpClient)
+	prm, err := o.discoverPRM(o.httpClient)
+	if err != nil {
+		return "", err
+	}
 
 	fmt.Println("2) Discovering Authorization Server Metadata…")
-	asmd := o.discoverASMetadata(o.httpClient, prm)
+	asmd, err := o.discoverASMetadata(o.httpClient, prm)
+	if err != nil {
+		return "", err
+	}
 
 	scopes := asmd.ScopesSupported
 	if len(scopes) == 0 {
@@ -88,7 +94,10 @@ func (o *OAuthConfig) oauthDiscovery() (string, error) {
 	scopeStr := strings.Join(scopes, " ")
 
 	fmt.Println("3) Dynamic Client Registration (public client)…")
-	dcr := o.dynamicClientRegister(o.httpClient, asmd)
+	dcr, err := o.dynamicClientRegister(o.httpClient, asmd)
+	if err != nil {
+		return "", err
+	}
 	if dcr.ClientID == "" {
 		log.Fatal("DCR failed: empty client_id")
 	}
@@ -131,7 +140,7 @@ func (o *OAuthConfig) oauthDiscovery() (string, error) {
 
 // ---------- OAuth discovery ----------
 
-func (o *OAuthConfig) discoverPRM(c *http.Client) PRM {
+func (o *OAuthConfig) discoverPRM(c *http.Client) (*PRM, error) {
 	// Send initialize without auth to trigger 401
 	initPayload := map[string]any{
 		"jsonrpc": "2.0",
@@ -155,7 +164,7 @@ func (o *OAuthConfig) discoverPRM(c *http.Client) PRM {
 
 	resp, err := c.Do(req)
 	if err != nil {
-		log.Fatalf("PRM discovery request failed: %v", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -169,22 +178,22 @@ func (o *OAuthConfig) discoverPRM(c *http.Client) PRM {
 
 	rmResp, err := c.Get(rmURL)
 	if err != nil {
-		log.Fatalf("Failed to fetch PRM: %v", err)
+		return nil, err
 	}
 	defer rmResp.Body.Close()
 	if rmResp.StatusCode/100 != 2 {
 		b, _ := io.ReadAll(rmResp.Body)
-		log.Fatalf("PRM fetch failed: %s %s", rmResp.Status, string(b))
+		return nil, fmt.Errorf("PRM fetch failed: %s %s", rmResp.Status, string(b))
 	}
 
 	var prm PRM
 	if err := json.NewDecoder(rmResp.Body).Decode(&prm); err != nil {
-		log.Fatalf("PRM decode failed: %v", err)
+		return nil, err
 	}
-	return prm
+	return &prm, nil
 }
 
-func (o *OAuthConfig) discoverASMetadata(c *http.Client, prm PRM) ASMetadata {
+func (o *OAuthConfig) discoverASMetadata(c *http.Client, prm *PRM) (*ASMetadata, error) {
 	authBase := origin(o.MCPUrl)
 	if len(prm.AuthorizationServers) > 0 {
 		authBase = strings.TrimRight(prm.AuthorizationServers[0], "/")
@@ -193,33 +202,33 @@ func (o *OAuthConfig) discoverASMetadata(c *http.Client, prm PRM) ASMetadata {
 	mdURL := authBase + "/.well-known/oauth-authorization-server"
 	resp, err := c.Get(mdURL)
 	if err != nil {
-		log.Fatalf("AS metadata fetch failed: %v", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
 		// fallback endpoints (MCP authorization spec)
-		return ASMetadata{
+		return &ASMetadata{
 			AuthorizationEndpoint: authBase + "/authorize",
 			TokenEndpoint:         authBase + "/token",
 			RegistrationEndpoint:  authBase + "/register",
 			ScopesSupported:       prm.ScopesSupported,
-		}
+		}, nil
 	}
 
 	if resp.StatusCode/100 != 2 {
 		b, _ := io.ReadAll(resp.Body)
-		log.Fatalf("AS metadata fetch failed: %s %s", resp.Status, string(b))
+		return nil, fmt.Errorf("AS metadata fetch failed: %s %s", resp.Status, string(b))
 	}
 
 	var asmd ASMetadata
 	if err := json.NewDecoder(resp.Body).Decode(&asmd); err != nil {
-		log.Fatalf("AS metadata decode failed: %v", err)
+		return nil, err
 	}
-	return asmd
+	return &asmd, nil
 }
 
-func (o *OAuthConfig) dynamicClientRegister(c *http.Client, asmd ASMetadata) DCRResponse {
+func (o *OAuthConfig) dynamicClientRegister(c *http.Client, asmd *ASMetadata) (*DCRResponse, error) {
 	regEP := asmd.RegistrationEndpoint
 	if regEP == "" {
 		regEP = origin(o.MCPUrl) + "/register"
@@ -236,21 +245,21 @@ func (o *OAuthConfig) dynamicClientRegister(c *http.Client, asmd ASMetadata) DCR
 	b, _ := json.Marshal(payload)
 	resp, err := c.Post(regEP, "application/json", strings.NewReader(string(b)))
 	if err != nil {
-		log.Fatalf("DCR failed: %v", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode/100 != 2 {
 		body, _ := io.ReadAll(resp.Body)
-		log.Fatalf("DCR failed: %s %s", resp.Status, string(body))
+		return nil, fmt.Errorf("DCR failed: %s %s", resp.Status, string(body))
 	}
 
 	var dcr DCRResponse
 	if err := json.NewDecoder(resp.Body).Decode(&dcr); err != nil {
-		log.Fatalf("DCR decode failed: %v", err)
+		return nil, err
 	}
 	fmt.Printf("DCR response: %+v\n", dcr)
-	return dcr
+	return &dcr, nil
 }
 
 // ---------- OAuth browser + PKCE ----------

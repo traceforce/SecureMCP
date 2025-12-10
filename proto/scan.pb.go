@@ -132,19 +132,21 @@ func (FindingType) EnumDescriptor() ([]byte, []int) {
 
 // Finding represents a security finding from a scan
 type Finding struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Tool     string                 `protobuf:"bytes,1,opt,name=tool,proto3" json:"tool,omitempty"`
-	Type     FindingType            `protobuf:"varint,2,opt,name=type,proto3,enum=proto.FindingType" json:"type,omitempty"`
-	Severity RiskSeverity           `protobuf:"varint,3,opt,name=severity,proto3,enum=proto.RiskSeverity" json:"severity,omitempty"`
-	RuleId   string                 `protobuf:"bytes,4,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
-	Title    string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
-	File     string                 `protobuf:"bytes,6,opt,name=file,proto3" json:"file,omitempty"`       // Optional
-	Line     int32                  `protobuf:"varint,7,opt,name=line,proto3" json:"line,omitempty"`      // Optional
-	Message  string                 `protobuf:"bytes,8,opt,name=message,proto3" json:"message,omitempty"` // Optional
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tool          string                 `protobuf:"bytes,1,opt,name=tool,proto3" json:"tool,omitempty"`
+	Type          FindingType            `protobuf:"varint,2,opt,name=type,proto3,enum=proto.FindingType" json:"type,omitempty"`
+	Severity      RiskSeverity           `protobuf:"varint,3,opt,name=severity,proto3,enum=proto.RiskSeverity" json:"severity,omitempty"`
+	RuleId        string                 `protobuf:"bytes,4,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	Title         string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
+	McpServerName string                 `protobuf:"bytes,6,opt,name=mcp_server_name,json=mcpServerName,proto3" json:"mcp_server_name,omitempty"` // Optional
+	McpToolName   string                 `protobuf:"bytes,7,opt,name=mcp_tool_name,json=mcpToolName,proto3" json:"mcp_tool_name,omitempty"`       // Optional
+	File          string                 `protobuf:"bytes,8,opt,name=file,proto3" json:"file,omitempty"`                                          // Optional
+	Line          int32                  `protobuf:"varint,9,opt,name=line,proto3" json:"line,omitempty"`                                         // Optional
+	Message       string                 `protobuf:"bytes,10,opt,name=message,proto3" json:"message,omitempty"`                                   // Optional
 	// SCA-specific (optional but useful)
-	Package       string `protobuf:"bytes,9,opt,name=package,proto3" json:"package,omitempty"`  // Optional
-	Version       string `protobuf:"bytes,10,opt,name=version,proto3" json:"version,omitempty"` // Optional
-	Fixed         string `protobuf:"bytes,11,opt,name=fixed,proto3" json:"fixed,omitempty"`     // Optional
+	Package       string `protobuf:"bytes,11,opt,name=package,proto3" json:"package,omitempty"` // Optional
+	Version       string `protobuf:"bytes,12,opt,name=version,proto3" json:"version,omitempty"` // Optional
+	Fixed         string `protobuf:"bytes,13,opt,name=fixed,proto3" json:"fixed,omitempty"`     // Optional
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -214,6 +216,20 @@ func (x *Finding) GetTitle() string {
 	return ""
 }
 
+func (x *Finding) GetMcpServerName() string {
+	if x != nil {
+		return x.McpServerName
+	}
+	return ""
+}
+
+func (x *Finding) GetMcpToolName() string {
+	if x != nil {
+		return x.McpToolName
+	}
+	return ""
+}
+
 func (x *Finding) GetFile() string {
 	if x != nil {
 		return x.File
@@ -261,20 +277,22 @@ var File_scan_proto protoreflect.FileDescriptor
 const file_scan_proto_rawDesc = "" +
 	"\n" +
 	"\n" +
-	"scan.proto\x12\x05proto\"\xb1\x02\n" +
+	"scan.proto\x12\x05proto\"\xfd\x02\n" +
 	"\aFinding\x12\x12\n" +
 	"\x04tool\x18\x01 \x01(\tR\x04tool\x12&\n" +
 	"\x04type\x18\x02 \x01(\x0e2\x12.proto.FindingTypeR\x04type\x12/\n" +
 	"\bseverity\x18\x03 \x01(\x0e2\x13.proto.RiskSeverityR\bseverity\x12\x17\n" +
 	"\arule_id\x18\x04 \x01(\tR\x06ruleId\x12\x14\n" +
-	"\x05title\x18\x05 \x01(\tR\x05title\x12\x12\n" +
-	"\x04file\x18\x06 \x01(\tR\x04file\x12\x12\n" +
-	"\x04line\x18\a \x01(\x05R\x04line\x12\x18\n" +
-	"\amessage\x18\b \x01(\tR\amessage\x12\x18\n" +
-	"\apackage\x18\t \x01(\tR\apackage\x12\x18\n" +
-	"\aversion\x18\n" +
-	" \x01(\tR\aversion\x12\x14\n" +
-	"\x05fixed\x18\v \x01(\tR\x05fixed*\x8e\x01\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\x12&\n" +
+	"\x0fmcp_server_name\x18\x06 \x01(\tR\rmcpServerName\x12\"\n" +
+	"\rmcp_tool_name\x18\a \x01(\tR\vmcpToolName\x12\x12\n" +
+	"\x04file\x18\b \x01(\tR\x04file\x12\x12\n" +
+	"\x04line\x18\t \x01(\x05R\x04line\x12\x18\n" +
+	"\amessage\x18\n" +
+	" \x01(\tR\amessage\x12\x18\n" +
+	"\apackage\x18\v \x01(\tR\apackage\x12\x18\n" +
+	"\aversion\x18\f \x01(\tR\aversion\x12\x14\n" +
+	"\x05fixed\x18\r \x01(\tR\x05fixed*\x8e\x01\n" +
 	"\fRiskSeverity\x12\x19\n" +
 	"\x15RISK_SEVERITY_UNKNOWN\x10\x00\x12\x15\n" +
 	"\x11RISK_SEVERITY_LOW\x10\x01\x12\x18\n" +

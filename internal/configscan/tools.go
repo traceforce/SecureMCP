@@ -1,6 +1,7 @@
 package configscan
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,11 +16,13 @@ import (
 
 type ToolsScanner struct {
 	MCPconfigPath string
+	llmAnalyzer   *LLMAnalyzer
 }
 
 func NewToolsScanner(configPath string) *ToolsScanner {
 	return &ToolsScanner{
 		MCPconfigPath: configPath,
+		llmAnalyzer:   NewLLMAnalyzerFromEnv(),
 	}
 }
 
@@ -30,21 +33,54 @@ func (s *ToolsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 		return nil, err
 	}
 
+	var allFindings []proto.Finding
+
 	for _, server := range servers {
 		fmt.Println(server.RawJSON)
 		tools, err := s.GetTools(ctx, server)
 		if err != nil {
-			return nil, err
+			// Log error but continue with other servers
+			fmt.Printf("Warning: failed to get tools for server %s: %v\n", server.Name, err)
+			continue
 		}
-		for _, tool := range tools {
-			fmt.Printf("Name: %s\nDescription: %s\n\n", tool.Name, tool.Description)
+		for idx, tool := range tools {
+			if idx >= 1 {
+				break
+			}
+			fmt.Printf("Analyzing tool: %v\nDescription: %v\nInput Schema: %v\n", tool.Name, tool.Description, formatJSON(tool.InputSchema))
+			findings, err := s.analyzeTool(ctx, tool, server.Name)
+			if err != nil {
+				// Log error but continue with other tools
+				fmt.Printf("Warning: failed to analyze tool %s: %v\n", tool.Name, err)
+				break
+			}
+			allFindings = append(allFindings, findings...)
 		}
 	}
 
-	// Return tools
-	return nil, nil
+	return allFindings, nil
 }
 
+func (s *ToolsScanner) analyzeTool(ctx context.Context, tool Tool, mcpServerName string) ([]proto.Finding, error) {
+	if s.llmAnalyzer == nil {
+		return []proto.Finding{}, nil
+	}
+	return s.llmAnalyzer.AnalyzeTool(ctx, tool, mcpServerName)
+}
+
+// formatJSON returns pretty-printed JSON when possible, or falls back to raw bytes.
+func formatJSON(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		return string(raw)
+	}
+	return buf.String()
+}
+
+/**********************************Tool helper functions*****************************************/
 const (
 	MCPTimeout         = 5 * time.Second
 	MCPProtocolVersion = "2025-06-18"
@@ -93,6 +129,8 @@ type ToolsListResult struct {
 // GetTools discovers available tools from an MCP server
 func (s *ToolsScanner) GetTools(ctx context.Context, cfg configparser.MCPServerConfig) ([]Tool, error) {
 	transport := ClassifyTransport(cfg)
+
+	fmt.Printf("Transport for MCP %s: %+v\n", cfg.Name, transport)
 
 	switch transport {
 	case proto.MCPTransportType_MCP_TRANSPORT_TYPE_STDIO:

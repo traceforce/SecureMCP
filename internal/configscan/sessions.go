@@ -171,6 +171,8 @@ func newMCPStdioSessionOnce(ctx context.Context, cfg configparser.MCPServerConfi
 		return nil, fmt.Errorf("no command specified for STDIO transport")
 	}
 
+	fmt.Printf("Starting MCP Stdio Session %+v\n", cfg)
+
 	sessionCtx, cancel := context.WithCancel(ctx)
 
 	// Handle commands that may contain spaces (e.g., "uvx package@version")
@@ -243,6 +245,8 @@ func newMCPStdioSessionOnce(ctx context.Context, cfg configparser.MCPServerConfi
 		}
 		return nil, fmt.Errorf("failed to initialize MCP session: %w", err)
 	}
+
+	fmt.Printf("MCP Stdio Session initialized %+v\n", session)
 
 	return session, nil
 }

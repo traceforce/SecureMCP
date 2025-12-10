@@ -185,25 +185,5 @@
     "package": "vite",
     "version": "5.4.10",
     "fixed": "6.2.5"
-  },
-  {
-    "tool": "gitleaks",
-    "type": "secrets",
-    "severity": "high",
-    "rule_id": "jwt",
-    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
-    "file": "/Users/xiahua/src/traceforce-ui/.env",
-    "line": 2,
-    "message": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data."
-  },
-  {
-    "tool": "gitleaks",
-    "type": "secrets",
-    "severity": "high",
-    "rule_id": "jwt",
-    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
-    "file": "/Users/xiahua/src/traceforce-ui/.env.example",
-    "line": 2,
-    "message": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data."
   }
 ]

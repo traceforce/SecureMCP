@@ -7,23 +7,36 @@ import (
 )
 
 type ConfigScanner struct {
-	configPath   string
-	toolsScanner *ToolsScanner
+	configPath     string
+	secretsScanner *SecretsScanner
+	sslScanner     *SSLScanner
+	toolsScanner   *ToolsScanner
 }
 
 func NewConfigScanner(configPath string) *ConfigScanner {
 	return &ConfigScanner{
-		configPath:   configPath,
-		toolsScanner: NewToolsScanner(configPath),
+		configPath:     configPath,
+		secretsScanner: NewSecretsScanner(configPath),
+		sslScanner:     NewSSLScanner(configPath),
+		toolsScanner:   NewToolsScanner(configPath),
 	}
-}
-
-func NewDefaultConfigScanner(configPath string) *ConfigScanner {
-	return NewConfigScanner(configPath)
 }
 
 func (s *ConfigScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 	findings := []proto.Finding{}
+
+	secretsFindings, err := s.secretsScanner.Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	findings = append(findings, secretsFindings...)
+
+	sslFindings, err := s.sslScanner.Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	findings = append(findings, sslFindings...)
+
 	toolsFindings, err := s.toolsScanner.Scan(ctx)
 	if err != nil {
 		return nil, err

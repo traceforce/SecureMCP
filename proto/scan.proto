@@ -28,12 +28,14 @@ message Finding {
   RiskSeverity severity = 3;
   string rule_id = 4;
   string title = 5;
-  string file = 6;      // Optional
-  int32 line = 7;       // Optional
-  string message = 8;   // Optional
+  string mcp_server_name = 6; // Optional
+  string mcp_tool_name = 7; // Optional
+  string file = 8;      // Optional
+  int32 line = 9;       // Optional
+  string message = 10;   // Optional
 
   // SCA-specific (optional but useful)
-  string package = 9;   // Optional
-  string version = 10;  // Optional
-  string fixed = 11;    // Optional
+  string package = 11;   // Optional
+  string version = 12;  // Optional
+  string fixed = 13;    // Optional
 }

@@ -1,14 +1,5 @@
 [
   {
-    "tool": "gitleaks",
-    "type": "Secrets",
-    "severity": "high",
-    "rule_id": "github-fine-grained-pat",
-    "title": "Found a GitHub Fine-Grained Personal Access Token, risking unauthorized repository access and code manipulation.",
-    "mcp_server_name": "github",
-    "message": "Found a GitHub Fine-Grained Personal Access Token, risking unauthorized repository access and code manipulation."
-  },
-  {
     "tool": "llm_analyzer",
     "type": "SAST",
     "severity": "medium",

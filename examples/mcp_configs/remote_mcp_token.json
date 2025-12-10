@@ -6,10 +6,6 @@
       "headers": {
         "Authorization": "Bearer sbp_b6ec5011ec618f185434b35efc87cec05bc04ee7"
       }
-    },
-    "notion": {
-      "type": "http",
-      "url": "https://mcp.notion.com/mcp"
     }
   }
 }
