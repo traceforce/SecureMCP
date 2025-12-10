@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"SecureMCP/internal/build"
 	configparser "SecureMCP/internal/configparser"
+	metadata "SecureMCP/internal/metadata"
 	"SecureMCP/proto"
 )
 
@@ -43,10 +43,7 @@ func (s *ToolsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 			fmt.Printf("Warning: failed to get tools for server %s: %v\n", server.Name, err)
 			continue
 		}
-		for idx, tool := range tools {
-			if idx >= 1 {
-				break
-			}
+		for _, tool := range tools {
 			fmt.Printf("Analyzing tool: %v\nDescription: %v\nInput Schema: %v\n", tool.Name, tool.Description, formatJSON(tool.InputSchema))
 			findings, err := s.analyzeTool(ctx, tool, server.Name)
 			if err != nil {
@@ -65,7 +62,7 @@ func (s *ToolsScanner) analyzeTool(ctx context.Context, tool Tool, mcpServerName
 	if s.llmAnalyzer == nil {
 		return []proto.Finding{}, nil
 	}
-	return s.llmAnalyzer.AnalyzeTool(ctx, tool, mcpServerName)
+	return s.llmAnalyzer.AnalyzeTool(ctx, tool, mcpServerName, s.MCPconfigPath)
 }
 
 // formatJSON returns pretty-printed JSON when possible, or falls back to raw bytes.
@@ -194,8 +191,8 @@ func (s *ToolsScanner) getToolsHTTP(ctx context.Context, cfg configparser.MCPSer
 			"protocolVersion": MCPProtocolVersion,
 			"capabilities":    map[string]interface{}{},
 			"clientInfo": map[string]string{
-				"name":    build.Name,
-				"version": build.Version,
+				"name":    metadata.Name,
+				"version": metadata.Version,
 			},
 		},
 		ID: int(atomic.AddInt64(&requestIDCounter, 1)),
@@ -204,12 +201,12 @@ func (s *ToolsScanner) getToolsHTTP(ctx context.Context, cfg configparser.MCPSer
 	initResp, err := session.sendRequest(ctx, initReq)
 	if err != nil {
 		// If initialize fails, try direct tools/list (some servers allow this)
-		return s.getToolsDirectHTTP(ctx, session, cfg)
+		return s.getToolsDirectHTTP(ctx, session)
 	}
 
 	if initResp.Error != nil {
 		// If initialize has an error, try direct approach
-		return s.getToolsDirectHTTP(ctx, session, cfg)
+		return s.getToolsDirectHTTP(ctx, session)
 	}
 
 	// Send tools/list request (session ID will be included automatically if needed)
@@ -223,7 +220,7 @@ func (s *ToolsScanner) getToolsHTTP(ctx context.Context, cfg configparser.MCPSer
 	toolsResp, err := session.sendRequest(ctx, toolsReq)
 	if err != nil {
 		// If tools/list fails after successful initialize, try direct approach
-		return s.getToolsDirectHTTP(ctx, session, cfg)
+		return s.getToolsDirectHTTP(ctx, session)
 	}
 
 	if toolsResp.Error != nil {
@@ -239,7 +236,7 @@ func (s *ToolsScanner) getToolsHTTP(ctx context.Context, cfg configparser.MCPSer
 }
 
 // getToolsDirectHTTP tries tools/list without initialize
-func (s *ToolsScanner) getToolsDirectHTTP(ctx context.Context, session *MCPSession, cfg configparser.MCPServerConfig) ([]Tool, error) {
+func (s *ToolsScanner) getToolsDirectHTTP(ctx context.Context, session *MCPSession) ([]Tool, error) {
 	toolsReq := MCPRequest{
 		JSONRPC: MCPJSONRPCVersion,
 		Method:  "tools/list",

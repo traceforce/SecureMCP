@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	configscan "SecureMCP/internal/configscan"
+	"SecureMCP/internal/report"
 	reposcan "SecureMCP/internal/reposcan"
 	"SecureMCP/proto"
 
@@ -39,13 +41,13 @@ func NewConfigScanCommand() *cobra.Command {
 			}
 
 			outputPath, _ := cmd.Flags().GetString("output")
-			if err := writeFindings(findings, outputPath); err != nil {
+			if err := writeFindings(findings, outputPath, "config-scan"); err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			}
 		},
 	}
-	cmd.Flags().StringP("output", "o", "", "Output file path for scan results (default: findings.json)")
+	cmd.Flags().StringP("output", "o", "", "Output file path for SARIF report (default: findings.sarif.json)")
 	return cmd
 }
 
@@ -68,13 +70,13 @@ func NewRepoScanCommand() *cobra.Command {
 			}
 
 			outputPath, _ := cmd.Flags().GetString("output")
-			if err := writeFindings(findings, outputPath); err != nil {
+			if err := writeFindings(findings, outputPath, "repo-scan"); err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			}
 		},
 	}
-	cmd.Flags().StringP("output", "o", "", "Output file path for scan results (default: findings.json)")
+	cmd.Flags().StringP("output", "o", "", "Output file path for SARIF report (default: findings.sarif.json)")
 	return cmd
 }
 
@@ -90,21 +92,24 @@ func main() {
 	}
 }
 
-func writeFindings(findings []proto.Finding, outputPath string) error {
-	jsonBytes, err := json.MarshalIndent(findings, "", "  ")
+func writeFindings(findings []proto.Finding, outputPath string, commandName string) error {
+	sarifBytes, err := report.GenerateSarif(findings)
 	if err != nil {
-		return fmt.Errorf("error marshaling findings: %w", err)
+		return fmt.Errorf("error generating SARIF report: %w", err)
 	}
 
 	if outputPath == "" {
-		outputPath = "findings.json"
+		timestamp := time.Now().Format(time.RFC3339)
+		// Make RFC3339 filename-safe by replacing colons with hyphens
+		timestamp = strings.ReplaceAll(timestamp, ":", "-")
+		outputPath = fmt.Sprintf("findings-%s-%s.sarif.json", commandName, timestamp)
 	}
 
-	err = os.WriteFile(outputPath, jsonBytes, 0644)
+	err = os.WriteFile(outputPath, sarifBytes, 0644)
 	if err != nil {
 		return fmt.Errorf("error writing to output file %s: %w", outputPath, err)
 	}
 
-	fmt.Printf("Findings written to %s\n", outputPath)
+	fmt.Printf("SARIF report written to %s\n", outputPath)
 	return nil
 }

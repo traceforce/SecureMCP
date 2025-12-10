@@ -149,6 +149,9 @@ func FromOSV(results models.VulnerabilityResults) []proto.Finding {
 			for _, vuln := range pkg.Vulnerabilities {
 				sev, _ := normalizeOSVSeverity(vuln)
 
+				// Get file path from result source
+				filePath := r.Source.Path
+
 				out = append(out, proto.Finding{
 					Tool:     "osv",
 					Type:     proto.FindingType_FINDING_TYPE_SCA,
@@ -157,6 +160,7 @@ func FromOSV(results models.VulnerabilityResults) []proto.Finding {
 					Title:    firstNonEmpty(vuln.GetSummary(), vuln.GetId()),
 					Message:  firstNonEmpty(vuln.GetDetails(), vuln.GetSummary()),
 
+					File:    filePath,
 					Package: pkgName,
 					Version: pkgVer,
 					Fixed:   bestFixedVersion(vuln, pkgName),

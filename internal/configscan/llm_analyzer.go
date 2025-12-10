@@ -101,7 +101,7 @@ type SecurityFinding struct {
 }
 
 // AnalyzeTool analyzes a tool for security risks
-func (a *LLMAnalyzer) AnalyzeTool(ctx context.Context, tool Tool, mcpServerName string) ([]proto.Finding, error) {
+func (a *LLMAnalyzer) AnalyzeTool(ctx context.Context, tool Tool, mcpServerName string, configPath string) ([]proto.Finding, error) {
 	if a.apiKey == "" {
 		return nil, fmt.Errorf("no API key configured")
 	}
@@ -116,7 +116,7 @@ func (a *LLMAnalyzer) AnalyzeTool(ctx context.Context, tool Tool, mcpServerName 
 	}
 
 	// Parse the response
-	findings, err := a.parseLLMResponse(response, tool, mcpServerName)
+	findings, err := a.parseLLMResponse(response, tool, mcpServerName, configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse LLM response: %w", err)
 	}
@@ -126,31 +126,10 @@ func (a *LLMAnalyzer) AnalyzeTool(ctx context.Context, tool Tool, mcpServerName 
 
 // buildAnalysisPrompt creates a prompt for analyzing a tool
 func (a *LLMAnalyzer) buildAnalysisPrompt(tool Tool) string {
-	var inputSchemaStr string
-	if len(tool.InputSchema) > 0 {
-		// Pretty print the JSON schema
-		var prettyJSON bytes.Buffer
-		if err := json.Indent(&prettyJSON, tool.InputSchema, "", "  "); err == nil {
-			inputSchemaStr = prettyJSON.String()
-		} else {
-			inputSchemaStr = string(tool.InputSchema)
-		}
-	} else {
-		inputSchemaStr = "No input schema provided"
-	}
 
 	return fmt.Sprintf(`Analyze the following MCP tool for security risks. Focus on:
 1. Tool name: Does it suggest dangerous operations (e.g., file deletion, command execution, network access)?
 2. Tool description: Does it describe operations that could be exploited?
-3. Input schema: Are there parameters that could lead to:
-   - Command injection
-   - Path traversal
-   - SSRF (Server-Side Request Forgery)
-   - Arbitrary file read/write
-   - Code execution
-   - Information disclosure
-   - Authentication bypass
-   - Privilege escalation
 
 Return a JSON array of security findings. Each finding should have:
 - severity: "low", "medium", "high", or "critical"
@@ -163,10 +142,8 @@ Return ONLY valid JSON, no markdown, no code fences, no additional text.
 
 Tool Name: %s
 Tool Description: %s
-Input Schema:
-%s
 
-JSON Response:`, tool.Name, tool.Description, inputSchemaStr)
+JSON Response:`, tool.Name, tool.Description)
 }
 
 // callLLM calls the LLM API
@@ -302,7 +279,7 @@ func (a *LLMAnalyzer) buildAnthropicRequest(systemPrompt, userPrompt string) ([]
 }
 
 // parseLLMResponse parses the LLM response and converts it to proto.Finding
-func (a *LLMAnalyzer) parseLLMResponse(response string, tool Tool, mcpServerName string) ([]proto.Finding, error) {
+func (a *LLMAnalyzer) parseLLMResponse(response string, tool Tool, mcpServerName string, configPath string) ([]proto.Finding, error) {
 	var findings []SecurityFinding
 
 	// Try to parse as direct array
@@ -334,6 +311,7 @@ func (a *LLMAnalyzer) parseLLMResponse(response string, tool Tool, mcpServerName
 			Title:         f.Title,
 			McpServerName: mcpServerName,
 			McpToolName:   tool.Name,
+			File:          configPath,
 			Message:       f.Message,
 		})
 	}

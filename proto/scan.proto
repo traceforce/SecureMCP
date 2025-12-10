@@ -16,9 +16,11 @@ enum RiskSeverity {
 // FindingType represents the type of security finding
 enum FindingType {
   FINDING_TYPE_UNKNOWN = 0;
-  FINDING_TYPE_SCA = 1;      // Software Composition Analysis
-  FINDING_TYPE_SECRETS = 2;  // Secret detection
-  FINDING_TYPE_SAST = 3;     // Static Application Security Testing
+  FINDING_TYPE_CONNECTION = 1;  // Connection analysis
+  FINDING_TYPE_TOOLS = 2;      // Tools analysis
+  FINDING_TYPE_SECRETS = 3;  // Secret detection
+  FINDING_TYPE_SCA = 4;      // Software Composition Analysis
+  FINDING_TYPE_SAST = 5;     // Static Application Security Testing
 }
 
 // Finding represents a security finding from a scan

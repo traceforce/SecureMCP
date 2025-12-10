@@ -31,13 +31,13 @@ func (s *SecretsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 	findings := []proto.Finding{}
 
 	for _, server := range servers {
-		findings = append(findings, DetectSecrets(server)...)
+		findings = append(findings, DetectSecrets(server, s.configPath)...)
 	}
 
 	return findings, nil
 }
 
-func DetectSecrets(cfg configparser.MCPServerConfig) []proto.Finding {
+func DetectSecrets(cfg configparser.MCPServerConfig, configPath string) []proto.Finding {
 	fmt.Printf("Scanning secrets for server %s\n", cfg.Name)
 
 	if strings.TrimSpace(cfg.RawJSON) == "" {
@@ -51,13 +51,18 @@ func DetectSecrets(cfg configparser.MCPServerConfig) []proto.Finding {
 
 	results := detector.DetectString(cfg.RawJSON)
 
-	return FromGitleaks(cfg, results)
+	return FromGitleaks(cfg, results, configPath)
 }
 
-func FromGitleaks(cfg configparser.MCPServerConfig, findings []report.Finding) []proto.Finding {
+func FromGitleaks(cfg configparser.MCPServerConfig, findings []report.Finding, configPath string) []proto.Finding {
 	out := make([]proto.Finding, 0, len(findings))
 
 	for _, f := range findings {
+		message := f.Description
+		if message == "" {
+			message = fmt.Sprintf("A potential secret was detected in the MCP server configuration '%s' using rule '%s'. Secrets in configuration files pose a security risk and should be removed or stored securely.", cfg.Name, f.RuleID)
+		}
+
 		out = append(out, proto.Finding{
 			Tool:          "gitleaks",
 			McpServerName: cfg.Name,
@@ -65,7 +70,9 @@ func FromGitleaks(cfg configparser.MCPServerConfig, findings []report.Finding) [
 			Severity:      proto.RiskSeverity_RISK_SEVERITY_HIGH, // treat all secrets as high/error
 			RuleId:        f.RuleID,
 			Title:         f.Description,
-			Message:       f.Description, // avoid empty message
+			File:          configPath,
+			Line:          int32(f.StartLine),
+			Message:       message,
 		})
 	}
 

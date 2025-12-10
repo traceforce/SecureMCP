@@ -20,8 +20,8 @@ import (
 	"syscall"
 	"time"
 
-	"SecureMCP/internal/build"
 	configparser "SecureMCP/internal/configparser"
+	metadata "SecureMCP/internal/metadata"
 
 	"github.com/cenkalti/backoff/v4"
 )
@@ -260,8 +260,8 @@ func (s *MCPStdioSession) initialize() error {
 			"protocolVersion": MCPProtocolVersion,
 			"capabilities":    map[string]interface{}{},
 			"clientInfo": map[string]string{
-				"name":    build.Name,
-				"version": build.Version,
+				"name":    metadata.Name,
+				"version": metadata.Version,
 			},
 		},
 		ID: int(atomic.AddInt64(&requestIDCounter, 1)),
