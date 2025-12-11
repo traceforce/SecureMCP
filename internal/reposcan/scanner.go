@@ -31,11 +31,11 @@ func NewRepoScannerWithConfig(repoPath string, config *Config) *RepoScanner {
 
 func (s *RepoScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 	findings := []proto.Finding{}
-	scaFindings, err := s.scaScanner.Scan(ctx)
-	if err != nil {
-		return nil, err
-	}
-	findings = append(findings, scaFindings...)
+	// scaFindings, err := s.scaScanner.Scan(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// findings = append(findings, scaFindings...)
 
 	// Scan for secrets
 	secretsFindings, err := s.secretsScanner.Scan(ctx)
@@ -44,11 +44,11 @@ func (s *RepoScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 	}
 	findings = append(findings, secretsFindings...)
 
-	sastFindings, err := s.sastScanner.Scan(ctx)
-	if err != nil {
-		return nil, err
-	}
-	findings = append(findings, sastFindings...)
+	// sastFindings, err := s.sastScanner.Scan(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// findings = append(findings, sastFindings...)
 
 	return findings, nil
 }

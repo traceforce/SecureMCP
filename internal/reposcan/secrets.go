@@ -3,12 +3,13 @@ package reposcan
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"SecureMCP/proto"
 
 	"github.com/zricethezav/gitleaks/v8/detect"
 	"github.com/zricethezav/gitleaks/v8/report"
-	"github.com/zricethezav/gitleaks/v8/sources"
 )
 
 type SecretsScanner struct {
@@ -31,30 +32,48 @@ func (s *SecretsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 		return nil, fmt.Errorf("failed to create detector: %w", err)
 	}
 
-	// 2) Use gitleaks' built-in directory scanning which properly handles:
-	//    - Binary file filtering
-	//    - Large file skipping
-	//    - Allowlist/ignore patterns
-	//    - Symlink handling
-	//    - Archive extraction
-	dirSource := sources.Files{
-		Path:           s.repoPath,
-		Config:         &detector.Config,
-		Sema:           detector.Sema,
-		FollowSymlinks: detector.FollowSymlinks,
-		MaxFileSize:    detector.MaxTargetMegaBytes * 1_000_000, // Convert MB to bytes
-	}
+	var allFindings []report.Finding
 
-	allFindings, err := detector.DetectSource(ctx, &dirSource)
-	if err != nil {
-		return nil, fmt.Errorf("gitleaks scan error: %w", err)
-	}
+	err = filepath.Walk(s.repoPath, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 
-	// 3) Convert findings to string slice
-	fmt.Printf("Gitleaks found %d secrets\n", len(allFindings))
-	findings := FromGitleaks(allFindings)
+		// Check if path should be excluded based on config
+		if s.config.ShouldExclude(filePath) {
+			// Skip entire directory if it matches exclude pattern
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 
-	return findings, nil
+		if info.IsDir() {
+			return nil
+		}
+
+		// Skip files larger than configured max size
+		if info.Size() > s.config.MaxFileSize {
+			return nil
+		}
+
+		// Read file content
+		fileContent, err := os.ReadFile(filePath)
+		if err != nil {
+			return err
+		}
+
+		// Detect unsafe commands in this file
+		findings := detector.DetectString(string(fileContent))
+		for _, finding := range findings {
+			finding.File = filePath
+			allFindings = append(allFindings, finding)
+		}
+		return nil
+	})
+
+	fmt.Printf("Found %d secrets\n", len(allFindings))
+	return FromGitleaks(allFindings), nil
 }
 
 func FromGitleaks(findings []report.Finding) []proto.Finding {

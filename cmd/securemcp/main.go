@@ -62,7 +62,36 @@ func NewRepoScanCommand() *cobra.Command {
 			if len(args) > 0 {
 				repoPath = args[0]
 			}
-			scanner := reposcan.NewDefaultRepoScanner(repoPath)
+
+			var scanner *reposcan.RepoScanner
+			maxFileSize, _ := cmd.Flags().GetInt64("max-file-size")
+			excludedPaths, _ := cmd.Flags().GetStringArray("exclude-paths")
+			useDefaultExcludes, _ := cmd.Flags().GetBool("use-default-excludes")
+
+			// Build config - by default scan everything (no excludes)
+			config := &reposcan.Config{
+				MaxFileSize:   10 * 1024 * 1024, // 10MB default
+				ExcludedPaths: []string{},       // Empty by default - scan everything
+			}
+
+			// Apply max file size if specified
+			if maxFileSize > 0 {
+				config.MaxFileSize = maxFileSize
+			}
+
+			// Apply excluded paths
+			defaultConfig := reposcan.DefaultConfig()
+			if useDefaultExcludes {
+				// Use default excluded paths
+				config.ExcludedPaths = defaultConfig.ExcludedPaths
+			}
+			if len(excludedPaths) > 0 {
+				// User-provided excludes override or extend
+				config.ExcludedPaths = append(defaultConfig.ExcludedPaths, excludedPaths...)
+			}
+
+			scanner = reposcan.NewRepoScannerWithConfig(repoPath, config)
+
 			findings, err := scanner.Scan(context.Background())
 			if err != nil {
 				fmt.Println("Error scanning repository:", err)
@@ -77,6 +106,9 @@ func NewRepoScanCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringP("output", "o", "", "Output file path for SARIF report (default: findings.sarif.json)")
+	cmd.Flags().Int64("max-file-size", 0, "Maximum file size in bytes to scan (0 uses default: 10MB)")
+	cmd.Flags().StringArrayP("exclude-paths", "e", []string{}, "Path pattern to exclude from scanning (can be specified multiple times)")
+	cmd.Flags().Bool("use-default-excludes", true, "Use default exclude paths (e.g., node_modules, .git, etc.). By default, certain files and directories are excluded from scanning.")
 	return cmd
 }
 

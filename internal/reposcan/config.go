@@ -59,9 +59,11 @@ func DefaultConfig() *Config {
 			"*.egg-info",
 			".eggs",
 			".tox",
-			".env",
-			".env.local",
-			".env.*.local",
+			"go.sum",
+			"package-lock.json",
+			"yarn.lock",
+			"pnpm-lock.yaml",
+			"pnpm-lock.yaml",
 		},
 	}
 }
