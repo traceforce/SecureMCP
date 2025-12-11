@@ -55,7 +55,7 @@ func NewLLMAnalyzer(config LLMConfig) *LLMAnalyzer {
 
 // NewLLMAnalyzerFromEnv creates a new LLM analyzer from environment variables
 func NewLLMAnalyzerFromEnv() *LLMAnalyzer {
-	// Load environment variables from .env file (ignores error if .env doesn't exist)
+	// Try to load environment variables from .env file (ignores error if .env doesn't exist)
 	_ = godotenv.Load()
 
 	apiURL := os.Getenv("LLM_API_URL")

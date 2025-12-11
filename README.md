@@ -14,10 +14,13 @@ Analyzes MCP server configurations for security issues:
 
 - **Connection Security**: Validates HTTP/HTTPS connections, TLS configuration, and authentication mechanisms
 - **Tool Analysis**: Uses LLM-based analysis to detect potentially dangerous tool definitions that could lead to:
-  - Remote code execution
-  - File system access
-  - Network operations
-  - System command execution
+  - Arbitrary tool execution without validation
+  - Insufficient input validation on tool arguments
+  - Missing authorization or permission checks
+  - Code injection and repository modification
+  - Privilege escalation and access control bypass
+  - Credential exposure and connection hijacking
+  - Information disclosure and reconnaissance
 - **Secrets Detection**: Scans configuration files for exposed credentials, API keys, and other sensitive information
 
 ### Repository Scanning (`repo-scan`)
@@ -33,23 +36,31 @@ Performs comprehensive security analysis of the codebase:
 ### Prerequisites
 
 - [Go 1.25.4 or later](https://go.dev/dl/)
-- [buf](https://buf.build/docs/installation) (for protocol buffer generation)
 
 ### Build from Source
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/traceforce/SecureMCP
 cd SecureMCP
 
-# Install dependencies
-go mod download
+# Install required dependencies (buf, etc.)
+make install-dependencies
 
-# Generate protocol buffers before building the binary
+# Build everything (generates protobuf code and builds the binary)
+# The binary will be created as `securemcp` in the current directory
+make all
+
+```
+
+Alternatively, you can build individual components:
+
+```bash
+# Generate protocol buffers only
 make proto
 
-# Build the binary
-go build -o securemcp ./cmd/securemcp
+# Build the binary only (requires proto to be generated first)
+make build
 ```
 
 ## Usage
@@ -99,23 +110,14 @@ The repository scanner will:
 
 SecureMCP generates reports in [SARIF (Static Analysis Results Interchange Format)](https://sarifweb.azurewebsites.net/) format, which is widely supported by security tools and CI/CD platforms.
 
-### Finding Types
-
-- `FINDING_TYPE_CONNECTION`: Connection and authentication security issues
-- `FINDING_TYPE_TOOLS`: Security issues in MCP tool definitions
-- `FINDING_TYPE_SECRETS`: Exposed secrets and credentials
-- `FINDING_TYPE_SCA`: Vulnerable dependencies
-- `FINDING_TYPE_SAST`: Static code analysis findings
-
-### Severity Levels
-
-- `CRITICAL`: Immediate security risk requiring urgent attention
-- `HIGH`: Significant security vulnerability
-- `MEDIUM`: Moderate security concern
-- `LOW`: Minor security issue or best practice violation
-- `UNKNOWN`: Severity could not be determined
-
 ## Examples
+
+Example scan outputs are available in `examples/findings/`:
+
+- `config-scan-risky-tools.sarif.json`: Configuration scan findings for tools with high security risks
+- `config-scan-secrets.sarif.json`: Configuration scan findings for secrets exposed in configurations
+- `repo-scan-cve-secrets.sarif.json`: Repository scan findings for CVE vulnerabilities and secrets
+- `repo-scan-dangerous-commands.sarif.json`: Repository scan findings for dangerous command patterns
 
 Example MCP configuration files are available in the `examples/mcp_configs/` directory:
 
@@ -125,12 +127,10 @@ Example MCP configuration files are available in the `examples/mcp_configs/` dir
 - `mcp_with_env.json`: Configuration using environment variables
 - `mcp_with_proxy.json`: Configuration with proxy settings
 
-Example scan outputs are available in `examples/output/`:
-
-- `sast_findings.json`: Static analysis findings
-- `sca_findings.json`: Dependency vulnerability findings
-- `secrets_finding.json`: Secret detection results
-- `tools_findings.json`: Tool analysis findings
+An example MCP Server is available in the `examples/mcp_server/` directory:
+- `mcp_server.py`: FastMCP server using streamable-http transport
+- `mcp.json`: Configuration file for connecting to the server
+- `README.md`: Instructions for setting up and scanning the server
 
 ## Configuration
 

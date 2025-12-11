@@ -1,7 +1,14 @@
-.PHONY: proto clean install-tools help
+.PHONY: all build proto clean install-dependencies help
+
+# Build everything (proto + binary)
+all: proto build
+
+# Build the binary
+build:
+	go build -o securemcp ./cmd/securemcp
 
 # install tools
-install-tools:
+install-dependencies:
 	brew install bufbuild/buf/buf
 
 # Generate protobuf Go code
@@ -11,11 +18,14 @@ proto:
 # Clean generated files
 clean:
 	rm -f proto/*.pb.go
+	rm -f securemcp
 
 # Help target
 help:
 	@echo "Available targets:"
+	@echo "  all           - Generate protobuf code and build the binary"
+	@echo "  build         - Build the securemcp binary"
 	@echo "  proto         - Generate Go code from protobuf"
-	@echo "  clean         - Clean generated protobuf files"
-	@echo "  install-tools - Install required tools (protobuf, protoc-gen-go)"
+	@echo "  clean         - Clean generated protobuf files and binary"
+	@echo "  install-dependencies - Install required dependencies (protobuf, protoc-gen-go)"
 	@echo "  help          - Show this help message"
