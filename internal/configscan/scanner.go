@@ -13,13 +13,18 @@ type ConfigScanner struct {
 	toolsScanner      *ToolsScanner
 }
 
-func NewConfigScanner(configPath string) *ConfigScanner {
+func NewConfigScanner(configPath string, model string) (*ConfigScanner, error) {
+	toolsScanner, err := NewToolsScanner(configPath, model)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ConfigScanner{
 		configPath:        configPath,
 		secretsScanner:    NewSecretsScanner(configPath),
 		connectionScanner: NewConnectionScanner(configPath),
-		toolsScanner:      NewToolsScanner(configPath),
-	}
+		toolsScanner:      toolsScanner,
+	}, nil
 }
 
 func (s *ConfigScanner) Scan(ctx context.Context) ([]proto.Finding, error) {

@@ -134,15 +134,48 @@ An example MCP Server is available in the `examples/mcp_server/` directory:
 
 ## Configuration
 
+### Supported Models
+
+SecureMCP supports the following LLM providers for tool analysis:
+
+#### Anthropic (Claude)
+- Examples: `claude-3-5-sonnet-20241022`, `claude-3-opus-20240229`, `claude-3-5-haiku-20241022`
+- Requires: `LLM_API_KEY` environment variable
+
+#### OpenAI (GPT)
+- Examples: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`
+- Requires: `LLM_API_KEY` environment variable
+
+#### AWS Bedrock (Meta Llama)
+- Meta Llama inference profile ARNs starting with `arn:aws:bedrock:` and containing `llama`
+- Example: `arn:aws:bedrock:us-east-2:522814721969:inference-profile/us.meta.llama3-2-1b-instruct-v1:0`
+- Requires: AWS credentials configured via AWS SDK (environment variables, IAM role, or credentials file)
+
 ### Environment Variables
 
 For LLM-based tool analysis, configure your LLM API credentials:
 
+#### Anthropic or OpenAI
 ```bash
-export OPENAI_API_KEY=your-api-key
-# or
-export ANTHROPIC_API_KEY=your-api-key
+export LLM_API_KEY=your-api-key
 ```
+
+The same `LLM_API_KEY` environment variable is used for both Anthropic and OpenAI models. The tool automatically detects which provider to use based on the model name.
+
+#### AWS Bedrock
+For AWS Bedrock models, configure AWS credentials using one of the standard AWS SDK methods:
+
+```bash
+# Option 1: Environment variables
+export AWS_ACCESS_KEY_ID=your-access-key
+export AWS_SECRET_ACCESS_KEY=your-secret-key
+export AWS_REGION=us-east-1
+
+# Option 2: AWS credentials file (~/.aws/credentials)
+# Option 3: IAM role (when running on EC2/ECS/Lambda)
+```
+
+SecureMCP uses AWS SDK that will automatically load credentials from the environment, credentials file, or IAM role.
 
 ## Contributing
 

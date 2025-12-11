@@ -1,7 +1,6 @@
 package configscan
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -19,11 +18,15 @@ type ToolsScanner struct {
 	llmAnalyzer   *LLMAnalyzer
 }
 
-func NewToolsScanner(configPath string) *ToolsScanner {
+func NewToolsScanner(configPath string, model string) (*ToolsScanner, error) {
+	llmAnalyzer, err := NewLLMAnalyzerFromEnvWithModel(model)
+	if err != nil {
+		return nil, err
+	}
 	return &ToolsScanner{
 		MCPconfigPath: configPath,
-		llmAnalyzer:   NewLLMAnalyzerFromEnv(),
-	}
+		llmAnalyzer:   llmAnalyzer,
+	}, nil
 }
 
 func (s *ToolsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
@@ -39,33 +42,19 @@ func (s *ToolsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 		fmt.Println(server.RawJSON)
 		tools, err := s.GetTools(ctx, server)
 		if err != nil {
-			// Log error but continue with other servers
-			fmt.Printf("Warning: failed to get tools for server %s: %v\n", server.Name, err)
-			continue
+			return nil, err
 		}
 		if len(tools) == 0 {
 			continue
 		}
 
 		fmt.Printf("Analyzing %d tools for server %s\n", len(tools), server.Name)
-		// Batch analyze tools in groups of 10
-		const batchSize = 10
-		for i := 0; i < len(tools); i += batchSize {
-			end := i + batchSize
-			if end > len(tools) {
-				end = len(tools)
-			}
-			batch := tools[i:end]
-			fmt.Printf("Analyzing batch %d-%d of %d tools for server %s\n", i+1, end, len(tools), server.Name)
 
-			findings, err := s.analyzeTools(ctx, batch, server.Name)
-			if err != nil {
-				// Log error but continue with other batches
-				fmt.Printf("Warning: failed to analyze batch %d-%d for server %s: %v\n", i+1, end, server.Name, err)
-				continue
-			}
-			allFindings = append(allFindings, findings...)
+		findings, err := s.analyzeTools(ctx, tools, server.Name)
+		if err != nil {
+			return nil, err
 		}
+		allFindings = append(allFindings, findings...)
 	}
 
 	return allFindings, nil
@@ -76,18 +65,6 @@ func (s *ToolsScanner) analyzeTools(ctx context.Context, tools []Tool, mcpServer
 		return []proto.Finding{}, nil
 	}
 	return s.llmAnalyzer.AnalyzeTools(ctx, tools, mcpServerName, s.MCPconfigPath)
-}
-
-// formatJSON returns pretty-printed JSON when possible, or falls back to raw bytes.
-func formatJSON(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var buf bytes.Buffer
-	if err := json.Indent(&buf, raw, "", "  "); err != nil {
-		return string(raw)
-	}
-	return buf.String()
 }
 
 /**********************************Tool helper functions*****************************************/

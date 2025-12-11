@@ -33,7 +33,12 @@ func NewConfigScanCommand() *cobra.Command {
 				configPath = args[0]
 			}
 
-			scanner := configscan.NewConfigScanner(configPath)
+			llmModel, _ := cmd.Flags().GetString("llm-model")
+			scanner, err := configscan.NewConfigScanner(configPath, llmModel)
+			if err != nil {
+				fmt.Println("Error creating config scanner:", err)
+				os.Exit(1)
+			}
 			findings, err := scanner.Scan(context.Background())
 			if err != nil {
 				fmt.Println("Error scanning configuration:", err)
@@ -48,6 +53,8 @@ func NewConfigScanCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringP("output", "o", "", "Output file path for SARIF report (default: findings.sarif.json)")
+	cmd.Flags().String("llm-model", "", "LLM model to use for analysis (required)")
+	cmd.MarkFlagRequired("llm-model")
 	return cmd
 }
 

@@ -1,132 +1,100 @@
 package configscan
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
 	"strings"
 	"time"
 
+	"SecureMCP/internal/llm"
 	"SecureMCP/proto"
-
-	"github.com/joho/godotenv"
 )
+
+const (
+	LLM_TYPE_UNKNOWN   = 0
+	LLM_TYPE_ANTHROPIC = 1
+	LLM_TYPE_OPENAI    = 2
+	LLM_TYPE_BEDROCK   = 3
+)
+
+// Batch size map: maps LLM type to batch size
+// 10 for Anthropic and OpenAI, 5 for Bedrock because the response limit is much smaller
+var batchSizeMap = map[int]int{
+	llm.LLM_TYPE_ANTHROPIC: 10,
+	llm.LLM_TYPE_OPENAI:    10,
+	llm.LLM_TYPE_AWS:       5, // Bedrock uses LLM_TYPE_AWS
+}
 
 // LLMAnalyzer analyzes MCP tools for security risks using an LLM
 type LLMAnalyzer struct {
-	apiURL  string
-	apiKey  string
-	model   string
-	llmType string // "openai" or "anthropic"
-	timeout time.Duration
-	client  *http.Client
+	llmClient *llm.LLMClient
 }
 
-// LLMConfig holds configuration for the LLM analyzer
-type LLMConfig struct {
-	APIURL  string // e.g., "https://api.openai.com/v1/chat/completions" or "https://api.anthropic.com/v1/messages"
-	APIKey  string
-	Model   string // e.g., "gpt-4" or "claude-3-5-sonnet-20241022"
-	LLMType string // "openai" or "anthropic"
-	Timeout time.Duration
-}
-
-// NewLLMAnalyzer creates a new LLM analyzer with the given configuration
-func NewLLMAnalyzer(config LLMConfig) *LLMAnalyzer {
-	if config.Timeout == 0 {
-		config.Timeout = 30 * time.Second
+// NewLLMAnalyzerFromEnvWithModel creates a new LLM analyzer from environment variables with an optional model override
+func NewLLMAnalyzerFromEnvWithModel(model string) (*LLMAnalyzer, error) {
+	llmClient, err := llm.NewLLMClientFromEnvWithModel(model, 30*time.Second)
+	if err != nil {
+		return nil, err
 	}
-
 	return &LLMAnalyzer{
-		apiURL:  config.APIURL,
-		apiKey:  config.APIKey,
-		model:   config.Model,
-		llmType: config.LLMType,
-		timeout: config.Timeout,
-		client: &http.Client{
-			Timeout: config.Timeout,
-		},
-	}
-}
-
-// NewLLMAnalyzerFromEnv creates a new LLM analyzer from environment variables
-func NewLLMAnalyzerFromEnv() *LLMAnalyzer {
-	// Try to load environment variables from .env file (ignores error if .env doesn't exist)
-	_ = godotenv.Load()
-
-	apiURL := os.Getenv("LLM_API_URL")
-	apiKey := os.Getenv("LLM_API_KEY")
-	model := os.Getenv("LLM_MODEL")
-	llmType := os.Getenv("LLM_TYPE")
-
-	// Set defaults if not provided
-	if apiURL == "" {
-		if llmType == "anthropic" {
-			apiURL = "https://api.anthropic.com/v1/messages"
-		} else {
-			apiURL = "https://api.openai.com/v1/chat/completions"
-		}
-	}
-	if llmType == "" {
-		llmType = "anthropic"
-	}
-	if model == "" {
-		if llmType == "anthropic" {
-			model = "claude-3-5-sonnet-20241022"
-		} else {
-			model = "gpt-4"
-		}
-	}
-
-	return NewLLMAnalyzer(LLMConfig{
-		APIURL:  apiURL,
-		APIKey:  apiKey,
-		Model:   model,
-		LLMType: llmType,
-		Timeout: 30 * time.Second,
-	})
+		llmClient: llmClient,
+	}, nil
 }
 
 // SecurityFinding represents a security finding from LLM analysis
 type SecurityFinding struct {
-	ToolName string `json:"tool_name,omitempty"` // Required for batch analysis
-	Severity string `json:"severity"`            // "low", "medium", "high", "critical"
-	RuleID   string `json:"rule_id"`
-	Title    string `json:"title"`
-	Message  string `json:"message"`
-	Category string `json:"category,omitempty"` // e.g., "command_injection", "path_traversal", etc.
+	ToolName        string `json:"tool_name,omitempty"`        // Required for batch analysis
+	ToolDescription string `json:"tool_description,omitempty"` // Required for batch analysis
+	Severity        string `json:"severity"`                   // "low", "medium", "high", "critical"
+	RuleID          string `json:"rule_id"`
+	Title           string `json:"title"`
+	Message         string `json:"message"`
+	Category        string `json:"category,omitempty"` // e.g., "command_injection", "path_traversal", etc.
 }
 
 // AnalyzeTools analyzes multiple tools for security risks in a single LLM call
 func (a *LLMAnalyzer) AnalyzeTools(ctx context.Context, tools []Tool, mcpServerName string, configPath string) ([]proto.Finding, error) {
-	if a.apiKey == "" {
-		return nil, fmt.Errorf("no API key configured")
-	}
-
 	if len(tools) == 0 {
 		return []proto.Finding{}, nil
 	}
 
-	// Build the prompt for batch LLM analysis
-	prompt := a.buildBatchAnalysisPrompt(tools)
-
-	// Call the LLM
-	response, err := a.callLLM(ctx, prompt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call LLM: %w", err)
+	// Get batch size based on LLM type
+	llmType := a.llmClient.GetType()
+	batchSize, ok := batchSizeMap[llmType]
+	if !ok {
+		return nil, fmt.Errorf("unsupported LLM type: %d", llmType)
 	}
 
-	// Parse the response
-	findings, err := a.parseBatchLLMResponse(response, tools, mcpServerName, configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse LLM response: %w", err)
+	var allFindings []proto.Finding
+
+	for i := 0; i < len(tools); i += batchSize {
+		end := i + batchSize
+		if end > len(tools) {
+			end = len(tools)
+		}
+		batch := tools[i:end]
+
+		fmt.Printf("Analyzing batch %d-%d of %d tools for server %s\n", i+1, end, len(tools), mcpServerName)
+		// Build the prompt for batch LLM analysis
+		prompt := a.buildBatchAnalysisPrompt(batch)
+
+		// Call the LLM
+		response, err := a.callLLM(ctx, prompt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to call LLM: %w", err)
+		}
+
+		// Parse the response
+		findings, err := a.parseBatchLLMResponse(response, batch, mcpServerName, configPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse LLM response: %w", err)
+		}
+
+		allFindings = append(allFindings, findings...)
 	}
 
-	return findings, nil
+	return allFindings, nil
 }
 
 // buildBatchAnalysisPrompt creates a prompt for analyzing multiple tools
@@ -143,7 +111,8 @@ func (a *LLMAnalyzer) buildBatchAnalysisPrompt(tools []Tool) string {
 2. Tool description: Does it describe operations that could be exploited?
 
 Return a JSON object with a "results" field containing an array of security findings. Each finding should have:
-- tool_name: The name of the tool this finding applies to (required for batch analysis)
+- tool_name: The name of the tool this finding applies to. It should be an exact match to the tool name in the tools list.
+- tool_description: The description of the tool this finding applies to. It should be an exact match to the tool description in the tools list.
 - severity: "low", "medium", "high", or "critical"
 - rule_id: A unique identifier for the type of risk (e.g., "command_injection", "path_traversal")
 - title: A brief title describing the risk
@@ -164,174 +133,36 @@ Analyze the provided tool information and return a JSON array of security findin
 Each finding must have: severity, rule_id, title, message, and optionally category.
 Return ONLY valid JSON, no markdown formatting, no code fences.`
 
-	var reqBody []byte
-	var err error
-
-	if a.llmType == "anthropic" {
-		reqBody, err = a.buildAnthropicRequest(systemPrompt, userPrompt)
-	} else {
-		reqBody, err = a.buildOpenAIRequest(systemPrompt, userPrompt)
-	}
+	content, err := a.llmClient.ChatClient.Chat(ctx, systemPrompt, []llm.ChatMessage{
+		{Role: "user", Content: userPrompt},
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to build request: %w", err)
+		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", a.apiURL, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+	// Check if response is empty
+	if content == "" {
+		return "", fmt.Errorf("LLM returned empty response")
 	}
 
-	// Set headers
-	if a.llmType == "anthropic" {
-		req.Header.Set("x-api-key", a.apiKey)
-		req.Header.Set("anthropic-version", "2023-06-01")
-		req.Header.Set("content-type", "application/json")
-	} else {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", a.apiKey))
-		req.Header.Set("Content-Type", "application/json")
-	}
+	// Strip markdown code fences if present - handle various formats
+	content = a.stripMarkdownCodeFences(content)
 
-	resp, err := a.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
+	// Check again after trimming
+	if content == "" {
+		return "", fmt.Errorf("LLM response is empty after trimming markdown")
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("LLM API returned status %d: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Parse response based on LLM type
-	var content string
-	if a.llmType == "anthropic" {
-		var anthropicResp struct {
-			Content []struct {
-				Text string `json:"text"`
-			} `json:"content"`
-		}
-		if err := json.Unmarshal(bodyBytes, &anthropicResp); err != nil {
-			return "", fmt.Errorf("failed to parse Anthropic response: %w", err)
-		}
-		if len(anthropicResp.Content) == 0 {
-			return "", fmt.Errorf("empty response from Anthropic")
-		}
-		content = anthropicResp.Content[0].Text
-	} else {
-		var openaiResp struct {
-			Choices []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			} `json:"choices"`
-		}
-		if err := json.Unmarshal(bodyBytes, &openaiResp); err != nil {
-			return "", fmt.Errorf("failed to parse OpenAI response: %w", err)
-		}
-		if len(openaiResp.Choices) == 0 {
-			return "", fmt.Errorf("empty response from OpenAI")
-		}
-		content = openaiResp.Choices[0].Message.Content
-	}
-
-	// Strip markdown code fences if present
-	content = strings.TrimSpace(content)
-	if strings.HasPrefix(content, "```json") {
-		content = strings.TrimPrefix(content, "```json")
-	} else if strings.HasPrefix(content, "```") {
-		content = strings.TrimPrefix(content, "```")
-	}
-	content = strings.TrimSuffix(content, "```")
-	content = strings.TrimSpace(content)
 
 	return content, nil
 }
 
-// buildOpenAIRequest builds a request for OpenAI API
-func (a *LLMAnalyzer) buildOpenAIRequest(systemPrompt, userPrompt string) ([]byte, error) {
-	// Wrap prompt to ensure consistent JSON format with results array
-	wrappedPrompt := fmt.Sprintf(`Return a JSON object with a "results" field containing an array of findings. %s`, userPrompt)
-
-	reqBody := map[string]interface{}{
-		"model": a.model,
-		"messages": []map[string]string{
-			{"role": "system", "content": systemPrompt},
-			{"role": "user", "content": wrappedPrompt},
-		},
-		"temperature": 0.0,
-		"response_format": map[string]string{
-			"type": "json_object",
-		},
-	}
-
-	return json.Marshal(reqBody)
-}
-
-// buildAnthropicRequest builds a request for Anthropic API
-func (a *LLMAnalyzer) buildAnthropicRequest(systemPrompt, userPrompt string) ([]byte, error) {
-	// Anthropic uses a different format - combine system and user prompts
-	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
-
-	reqBody := map[string]interface{}{
-		"model":      a.model,
-		"max_tokens": 4096,
-		"messages": []map[string]string{
-			{"role": "user", "content": fullPrompt},
-		},
-		"temperature": 0.0,
-	}
-
-	return json.Marshal(reqBody)
-}
-
-// parseLLMResponse parses the LLM response and converts it to proto.Finding
-func (a *LLMAnalyzer) parseLLMResponse(response string, tool Tool, mcpServerName string, configPath string) ([]proto.Finding, error) {
-	var findings []SecurityFinding
-
-	// Try to parse as direct array
-	if err := json.Unmarshal([]byte(response), &findings); err != nil {
-		// Try to parse as wrapped object with "results" field
-		var wrapped struct {
-			Results []SecurityFinding `json:"results"`
-		}
-		if err2 := json.Unmarshal([]byte(response), &wrapped); err2 != nil {
-			return nil, fmt.Errorf("failed to parse LLM response as JSON array or results object: %v, %v", err, err2)
-		}
-		findings = wrapped.Results
-	}
-
-	// Convert to proto.Finding
-	protoFindings := make([]proto.Finding, 0, len(findings))
-	for _, f := range findings {
-		severity := a.mapSeverity(f.Severity)
-		ruleID := f.RuleID
-		if ruleID == "" {
-			ruleID = "llm_analyzer_finding"
-		}
-
-		protoFindings = append(protoFindings, proto.Finding{
-			Tool:          "llm_analyzer",
-			Type:          proto.FindingType_FINDING_TYPE_SAST,
-			Severity:      severity,
-			RuleId:        ruleID,
-			Title:         f.Title,
-			McpServerName: mcpServerName,
-			McpToolName:   tool.Name,
-			File:          configPath,
-			Message:       f.Message,
-		})
-	}
-
-	return protoFindings, nil
-}
-
 // parseBatchLLMResponse parses the batch LLM response and converts it to proto.Finding
 func (a *LLMAnalyzer) parseBatchLLMResponse(response string, tools []Tool, mcpServerName string, configPath string) ([]proto.Finding, error) {
+	// Validate response is not empty
+	if response == "" {
+		return nil, fmt.Errorf("LLM response is empty, cannot parse JSON")
+	}
+
 	// Create a map of tool names to tools for quick lookup
 	toolMap := make(map[string]Tool)
 	for _, tool := range tools {
@@ -344,12 +175,17 @@ func (a *LLMAnalyzer) parseBatchLLMResponse(response string, tools []Tool, mcpSe
 	var wrapped struct {
 		Results []SecurityFinding `json:"results"`
 	}
-	if err := json.Unmarshal([]byte(response), &wrapped); err == nil {
+	if err := json.Unmarshal([]byte(response), &wrapped); err == nil && len(wrapped.Results) > 0 {
 		findings = wrapped.Results
 	} else {
 		// Fallback: try to parse as direct array
 		if err2 := json.Unmarshal([]byte(response), &findings); err2 != nil {
-			return nil, fmt.Errorf("failed to parse LLM response as JSON: %v (also tried wrapped format: %v)", err2, err)
+			// Include a snippet of the response in the error for debugging
+			responseSnippet := response
+			if len(responseSnippet) > 200 {
+				responseSnippet = responseSnippet[:200] + "..."
+			}
+			return nil, fmt.Errorf("failed to parse LLM response as JSON (response length: %d, snippet: %q): %v (also tried wrapped format: %v)", len(response), responseSnippet, err2, err)
 		}
 	}
 
@@ -390,11 +226,43 @@ func (a *LLMAnalyzer) parseBatchLLMResponse(response string, tools []Tool, mcpSe
 			McpServerName: mcpServerName,
 			McpToolName:   targetTool.Name,
 			File:          configPath,
-			Message:       f.Message,
+			Message:       f.Message + " (Tool description: " + f.ToolDescription + ")",
 		})
 	}
 
 	return protoFindings, nil
+}
+
+// stripMarkdownCodeFences removes markdown code fences from the content
+// Handles various formats: ```json, ```, with or without newlines
+func (a *LLMAnalyzer) stripMarkdownCodeFences(content string) string {
+	content = strings.TrimSpace(content)
+
+	// Try to find JSON content by looking for the first { and last }
+	// This handles cases where there might be text or backticks before/after
+	firstBrace := strings.Index(content, "{")
+	lastBrace := strings.LastIndex(content, "}")
+
+	if firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace {
+		// Extract just the JSON portion
+		content = content[firstBrace : lastBrace+1]
+	} else {
+		// Fallback to string manipulation if JSON braces not found
+		// Remove opening code fences (with or without language specifier)
+		content = strings.TrimPrefix(content, "```json")
+		content = strings.TrimPrefix(content, "```")
+		content = strings.TrimSpace(content)
+
+		// Remove closing code fences (handle multiple cases)
+		content = strings.TrimSuffix(content, "```")
+		content = strings.TrimSpace(content)
+
+		// Remove any remaining standalone backticks
+		content = strings.ReplaceAll(content, "```", "")
+		content = strings.TrimSpace(content)
+	}
+
+	return content
 }
 
 // mapSeverity maps string severity to proto.RiskSeverity
