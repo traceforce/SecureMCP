@@ -228,7 +228,7 @@ func (a *LLMAnalyzer) parseBatchLLMResponse(response string, tools []Tool, mcpSe
 			McpServerName: mcpServerName,
 			McpToolName:   targetTool.Name,
 			File:          configPath,
-			Message:       f.Message + " (Tool description: " + f.ToolDescription + ")",
+			Message:       f.Message + " Original tool description: " + f.ToolDescription,
 		})
 	}
 

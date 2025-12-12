@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"SecureMCP/internal/configscan/tokenanalyzer"
+	"SecureMCP/internal/yararules"
 	"SecureMCP/proto"
 )
 
@@ -65,8 +66,48 @@ func (a *TokenAnalyzer) AnalyzeTool(ctx context.Context, description string, nam
 			McpServerName: mcpServerName,
 			McpToolName:   name,
 			File:          configPath,
-			Message:       finding.Meta["reason"],
+			Message:       finding.Meta["reason"] + " Original tool description: " + description,
 		})
 	}
+
+	// Also run YARA rules against the description
+	yaraFindings := a.analyzeWithYaraRules(ctx, description, name, mcpServerName, configPath)
+	findings = append(findings, yaraFindings...)
+
 	return findings, nil
+}
+
+// analyzeWithYaraRules runs the description against YARA rules and returns findings
+func (a *TokenAnalyzer) analyzeWithYaraRules(_ context.Context, description string, name string,
+	mcpServerName string, configPath string) []proto.Finding {
+	normalizedDesc := yararules.NormalizeForPatternMatching(description)
+	patterns := yararules.GetUnsafeSystemPatterns()
+
+	var findings []proto.Finding
+	for _, pattern := range patterns {
+		if pattern.Pattern.MatchString(normalizedDesc) {
+			// Find the actual match in the original description
+			match := pattern.Pattern.FindString(normalizedDesc)
+			if match == "" {
+				match = pattern.Pattern.FindString(description)
+			}
+			if match == "" {
+				match = "unsafe pattern detected"
+			}
+
+			findings = append(findings, proto.Finding{
+				Tool:          "yara_analyzer",
+				Type:          proto.FindingType_FINDING_TYPE_TOOL_ANALYSIS,
+				Severity:      pattern.Severity,
+				RuleId:        pattern.Id,
+				Title:         string(pattern.Reason) + " - " + pattern.Id,
+				McpServerName: mcpServerName,
+				McpToolName:   name,
+				File:          configPath,
+				Message:       match,
+			})
+		}
+	}
+
+	return findings
 }

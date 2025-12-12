@@ -114,8 +114,8 @@ Scan the codebase for security vulnerabilities:
 
 The repository scanner will:
 1. Perform SCA analysis to detect vulnerable dependencies
-2. Run SAST analysis to find unsafe code patterns
-3. Scan for hardcoded secrets in source code
+2. Run SAST analysis to identify unsafe code patterns using YARA rules
+3. Scan for hardcoded secrets and credentials in source code
 
 ## Output Format
 
@@ -151,29 +151,22 @@ SecureMCP provides two methods for analyzing tool security:
 
 #### Token Analyzer (Default)
 
-The token analyzer uses rule-based pattern matching to quickly detect security issues in tool descriptions. It's fast, doesn't require API keys, and works offline.
-
-**Features:**
-- Fast, deterministic analysis
-- No external API dependencies
-- YAML-based rule configuration
-- Detects common security patterns:
-  - Command injection (`command_injection`)
-  - Unvalidated user input (`unvalidated_user_input`)
-  - Insecure permission assignments (`insecure_permission_assignment`)
-  - Active connection leaks (`active_connection_leak`)
-  - Information disclosure (`information_disclosure`)
+The token analyzer uses rule-based pattern matching to quickly detect security issues in tool descriptions. It's fast, doesn't require API keys, and works offline. Token analyzer uses two types of rules:
+1. **Token rules** are defined in `internal/configscan/tokenanalyzer/token_rules.yaml`. Each rule specifies:
+   - Pattern matching criteria (tokens and phrases)
+   - Severity level (low, medium, high, critical)
+   - Security category and reason
+2. **YARA rules** are defined in `internal/yararules/unsafe_patterns.yar`. These rules detect unsafe system command patterns such as:
+   - Destructive file operations
+   - System security bypass attempts
+   - Remote code execution patterns
+   - Privilege escalation attempts
+   - And other dangerous system operations
 
 **Usage:**
 ```bash
 securemcp config-scan --analyzer-type token
 ```
-
-**Custom Rules:**
-Token analyzer rules are defined in `internal/configscan/tokenanalyzer/token_rules.yaml`. Each rule specifies:
-- Pattern matching criteria (tokens and phrases)
-- Severity level (low, medium, high, critical)
-- Security category and reason
 
 #### LLM Analyzer
 
