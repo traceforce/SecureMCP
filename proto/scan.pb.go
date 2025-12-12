@@ -81,12 +81,12 @@ func (RiskSeverity) EnumDescriptor() ([]byte, []int) {
 type FindingType int32
 
 const (
-	FindingType_FINDING_TYPE_UNKNOWN    FindingType = 0
-	FindingType_FINDING_TYPE_CONNECTION FindingType = 1 // Connection analysis
-	FindingType_FINDING_TYPE_TOOLS      FindingType = 2 // Tools analysis
-	FindingType_FINDING_TYPE_SECRETS    FindingType = 3 // Secret detection
-	FindingType_FINDING_TYPE_SCA        FindingType = 4 // Software Composition Analysis
-	FindingType_FINDING_TYPE_SAST       FindingType = 5 // Static Application Security Testing
+	FindingType_FINDING_TYPE_UNKNOWN       FindingType = 0
+	FindingType_FINDING_TYPE_CONNECTION    FindingType = 1 // Connection analysis
+	FindingType_FINDING_TYPE_TOOL_ANALYSIS FindingType = 2 // Tools analysis
+	FindingType_FINDING_TYPE_SECRETS       FindingType = 3 // Secret detection
+	FindingType_FINDING_TYPE_SCA           FindingType = 4 // Software Composition Analysis
+	FindingType_FINDING_TYPE_SAST          FindingType = 5 // Static Application Security Testing
 )
 
 // Enum value maps for FindingType.
@@ -94,18 +94,18 @@ var (
 	FindingType_name = map[int32]string{
 		0: "FINDING_TYPE_UNKNOWN",
 		1: "FINDING_TYPE_CONNECTION",
-		2: "FINDING_TYPE_TOOLS",
+		2: "FINDING_TYPE_TOOL_ANALYSIS",
 		3: "FINDING_TYPE_SECRETS",
 		4: "FINDING_TYPE_SCA",
 		5: "FINDING_TYPE_SAST",
 	}
 	FindingType_value = map[string]int32{
-		"FINDING_TYPE_UNKNOWN":    0,
-		"FINDING_TYPE_CONNECTION": 1,
-		"FINDING_TYPE_TOOLS":      2,
-		"FINDING_TYPE_SECRETS":    3,
-		"FINDING_TYPE_SCA":        4,
-		"FINDING_TYPE_SAST":       5,
+		"FINDING_TYPE_UNKNOWN":       0,
+		"FINDING_TYPE_CONNECTION":    1,
+		"FINDING_TYPE_TOOL_ANALYSIS": 2,
+		"FINDING_TYPE_SECRETS":       3,
+		"FINDING_TYPE_SCA":           4,
+		"FINDING_TYPE_SAST":          5,
 	}
 )
 
@@ -304,11 +304,11 @@ const file_scan_proto_rawDesc = "" +
 	"\x11RISK_SEVERITY_LOW\x10\x01\x12\x18\n" +
 	"\x14RISK_SEVERITY_MEDIUM\x10\x02\x12\x16\n" +
 	"\x12RISK_SEVERITY_HIGH\x10\x03\x12\x1a\n" +
-	"\x16RISK_SEVERITY_CRITICAL\x10\x04*\xa3\x01\n" +
+	"\x16RISK_SEVERITY_CRITICAL\x10\x04*\xab\x01\n" +
 	"\vFindingType\x12\x18\n" +
 	"\x14FINDING_TYPE_UNKNOWN\x10\x00\x12\x1b\n" +
-	"\x17FINDING_TYPE_CONNECTION\x10\x01\x12\x16\n" +
-	"\x12FINDING_TYPE_TOOLS\x10\x02\x12\x18\n" +
+	"\x17FINDING_TYPE_CONNECTION\x10\x01\x12\x1e\n" +
+	"\x1aFINDING_TYPE_TOOL_ANALYSIS\x10\x02\x12\x18\n" +
 	"\x14FINDING_TYPE_SECRETS\x10\x03\x12\x14\n" +
 	"\x10FINDING_TYPE_SCA\x10\x04\x12\x15\n" +
 	"\x11FINDING_TYPE_SAST\x10\x05B\x10Z\x0einternal/protob\x06proto3"

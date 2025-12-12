@@ -195,6 +195,7 @@ func newMCPStdioSessionOnce(ctx context.Context, cfg configparser.MCPServerConfi
 	cmd = exec.CommandContext(sessionCtx, executable, commandArgs...)
 
 	// Set environment variables from the config
+	cmd.Env = os.Environ()
 	if cfg.Env != nil {
 		for k, v := range cfg.Env {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))

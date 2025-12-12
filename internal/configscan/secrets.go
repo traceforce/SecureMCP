@@ -28,8 +28,9 @@ func (s *SecretsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 		return nil, err
 	}
 
-	findings := []proto.Finding{}
+	fmt.Printf("Secrets scanner scanning %d MCP servers\n", len(servers))
 
+	findings := []proto.Finding{}
 	for _, server := range servers {
 		findings = append(findings, DetectSecrets(server, s.configPath)...)
 	}
@@ -75,6 +76,8 @@ func FromGitleaks(cfg configparser.MCPServerConfig, findings []report.Finding, c
 			Message:       message,
 		})
 	}
+
+	fmt.Printf("Secrets scanner found %d findings\n", len(out))
 
 	return out
 }

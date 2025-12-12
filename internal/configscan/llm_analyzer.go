@@ -31,6 +31,8 @@ type LLMAnalyzer struct {
 	llmClient *llm.LLMClient
 }
 
+var _ ToolsAnalyzer = (*LLMAnalyzer)(nil)
+
 // NewLLMAnalyzerFromEnvWithModel creates a new LLM analyzer from environment variables with an optional model override
 func NewLLMAnalyzerFromEnvWithModel(model string) (*LLMAnalyzer, error) {
 	llmClient, err := llm.NewLLMClientFromEnvWithModel(model, 30*time.Second)

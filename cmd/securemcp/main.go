@@ -23,18 +23,51 @@ var rootCmd = &cobra.Command{
 
 func NewConfigScanCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "config-scan",
+		Use:   "config-scan <config-file>",
 		Short: "Scan the configuration of the MCP server",
-		Args:  cobra.MaximumNArgs(1),
+		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Scanning the configuration of the MCP server")
-			configPath := "."
-			if len(args) > 0 {
-				configPath = args[0]
+			configPath := args[0]
+
+			// Validate that configPath is a file, not a directory
+			fileInfo, err := os.Stat(configPath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					fmt.Printf("Error: config file does not exist: %s\n", configPath)
+				} else {
+					fmt.Printf("Error: cannot access config file: %s\n", err)
+				}
+				os.Exit(1)
+			}
+			if fileInfo.IsDir() {
+				fmt.Printf("Error: config path must be a file, not a directory: %s\n", configPath)
+				os.Exit(1)
 			}
 
+			analyzerType, _ := cmd.Flags().GetString("analyzer-type")
 			llmModel, _ := cmd.Flags().GetString("llm-model")
-			scanner, err := configscan.NewConfigScanner(configPath, llmModel)
+			fmt.Println("Analyzer type:", analyzerType)
+			fmt.Println("LLM model:", llmModel)
+
+			// Validate analyzer type
+			if analyzerType != "token" && analyzerType != "llm" {
+				fmt.Println("Error: analyzer-type must be either 'token' or 'llm'")
+				os.Exit(1)
+			}
+
+			// Require llm-model only when analyzer-type is "llm"
+			if analyzerType == "llm" && llmModel == "" {
+				fmt.Println("Error: llm-model is required when analyzer-type is 'llm'")
+				os.Exit(1)
+			}
+
+			if analyzerType == "token" && llmModel != "" {
+				fmt.Println("Warning: llm-model is not used when analyzer-type is 'token'")
+				llmModel = ""
+			}
+
+			scanner, err := configscan.NewConfigScanner(configPath, analyzerType, llmModel)
 			if err != nil {
 				fmt.Println("Error creating config scanner:", err)
 				os.Exit(1)
@@ -53,8 +86,8 @@ func NewConfigScanCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringP("output", "o", "", "Output file path for SARIF report (default: findings.sarif.json)")
-	cmd.Flags().String("llm-model", "", "LLM model to use for analysis (required)")
-	cmd.MarkFlagRequired("llm-model")
+	cmd.Flags().String("analyzer-type", "token", "Analyzer type to use: 'token' or 'llm' (default: token)")
+	cmd.Flags().String("llm-model", "", "LLM model to use for analysis (required when analyzer-type is 'llm')")
 	return cmd
 }
 

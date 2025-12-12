@@ -13,20 +13,38 @@ import (
 	"SecureMCP/proto"
 )
 
-type ToolsScanner struct {
-	MCPconfigPath string
-	llmAnalyzer   *LLMAnalyzer
+type ToolsAnalyzer interface {
+	AnalyzeTools(ctx context.Context, tools []Tool, mcpServerName string, configPath string) ([]proto.Finding, error)
 }
 
-func NewToolsScanner(configPath string, model string) (*ToolsScanner, error) {
-	llmAnalyzer, err := NewLLMAnalyzerFromEnvWithModel(model)
-	if err != nil {
-		return nil, err
+type ToolsScanner struct {
+	MCPconfigPath string
+	toolsAnalyzer ToolsAnalyzer
+}
+
+func NewToolsScanner(configPath string, analyzerType string, model string) (*ToolsScanner, error) {
+	switch analyzerType {
+	case "token":
+		tokenAnalyzer, err := NewTokenAnalyzer()
+		if err != nil {
+			return nil, err
+		}
+		return &ToolsScanner{
+			MCPconfigPath: configPath,
+			toolsAnalyzer: tokenAnalyzer,
+		}, nil
+	case "llm":
+		llmAnalyzer, err := NewLLMAnalyzerFromEnvWithModel(model)
+		if err != nil {
+			return nil, err
+		}
+		return &ToolsScanner{
+			MCPconfigPath: configPath,
+			toolsAnalyzer: llmAnalyzer,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported analyzer type: %s", analyzerType)
 	}
-	return &ToolsScanner{
-		MCPconfigPath: configPath,
-		llmAnalyzer:   llmAnalyzer,
-	}, nil
 }
 
 func (s *ToolsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
@@ -36,10 +54,10 @@ func (s *ToolsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 		return nil, err
 	}
 
-	var allFindings []proto.Finding
+	fmt.Printf("Tools scanner scanning %d MCP servers\n", len(servers))
 
+	var allFindings []proto.Finding
 	for _, server := range servers {
-		fmt.Println(server.RawJSON)
 		tools, err := s.GetTools(ctx, server)
 		if err != nil {
 			return nil, err
@@ -50,21 +68,16 @@ func (s *ToolsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 
 		fmt.Printf("Analyzing %d tools for server %s\n", len(tools), server.Name)
 
-		findings, err := s.analyzeTools(ctx, tools, server.Name)
+		findings, err := s.toolsAnalyzer.AnalyzeTools(ctx, tools, server.Name, s.MCPconfigPath)
 		if err != nil {
 			return nil, err
 		}
 		allFindings = append(allFindings, findings...)
 	}
 
-	return allFindings, nil
-}
+	fmt.Printf("Tools scanner found %d findings\n", len(allFindings))
 
-func (s *ToolsScanner) analyzeTools(ctx context.Context, tools []Tool, mcpServerName string) ([]proto.Finding, error) {
-	if s.llmAnalyzer == nil {
-		return []proto.Finding{}, nil
-	}
-	return s.llmAnalyzer.AnalyzeTools(ctx, tools, mcpServerName, s.MCPconfigPath)
+	return allFindings, nil
 }
 
 /**********************************Tool helper functions*****************************************/

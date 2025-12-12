@@ -10,22 +10,30 @@ SecureMCP performs security analysis on MCP (Model Context Protocol) servers and
 
 ### Configuration Scanning (`config-scan`)
 
-Analyzes MCP server configurations for security issues:
+Analyzes MCP server configurations for security issues. Designed to be run before you deploy any configuration to production services.
 
 - **Connection Security**: Validates HTTP/HTTPS connections, TLS configuration, and authentication mechanisms
-- **Tool Analysis**: Uses LLM-based analysis to detect potentially dangerous tool definitions that could lead to:
-  - Arbitrary tool execution without validation
-  - Insufficient input validation on tool arguments
-  - Missing authorization or permission checks
-  - Code injection and repository modification
-  - Privilege escalation and access control bypass
-  - Credential exposure and connection hijacking
-  - Information disclosure and reconnaissance
-- **Secrets Detection**: Scans configuration files for exposed credentials, API keys, and other sensitive information
+- **Tool Analysis**: Analyzes tool definitions for security risks using either:
+  - **Token Analyzer** (default): Fast, rule-based pattern matching that detects:
+    - Destructive commands
+    - Command injection and arbitrary tool execution
+    - Unvalidated user input
+    - Insecure permission assignments
+    - Active connection leaks
+    - Information disclosure risks
+  - **LLM Analyzer**: Deep semantic analysis using large language models to detect:
+    - Arbitrary tool execution without validation
+    - Insufficient input validation on tool arguments
+    - Missing authorization or permission checks
+    - Code injection and repository modification
+    - Privilege escalation and access control bypass
+    - Credential exposure and connection hijacking
+    - Information disclosure and reconnaissance
+- **Secrets Detection**: Scans configuration files for exposed credentials, API keys, and other sensitive information using Gitleaks
 
 ### Repository Scanning (`repo-scan`)
 
-Performs comprehensive security analysis of the codebase:
+Performs comprehensive security analysis of the MCP server codebase. Designed for custom MCP servers before adding them to configurations.
 
 - **SCA (Software Composition Analysis)**: Detects vulnerable dependencies using OSV Scanner
 - **SAST (Static Application Security Testing)**: Identifies unsafe command patterns and security anti-patterns in code
@@ -70,20 +78,23 @@ make build
 Scan MCP server configurations for security issues:
 
 ```bash
-# Scan current directory for MCP config files
-securemcp config-scan
+# Scan a specific MCP config file (uses token analyzer by default)
+./securemcp config-scan /path/to/mcp/config.json
 
-# Scan a specific directory
-securemcp config-scan /path/to/mcp/config
+# Use token analyzer explicitly (fast, rule-based)
+./securemcp config-scan /path/to/mcp/config.json --analyzer-type token
+
+# Use LLM analyzer for more extensive and deepr analysis
+./securemcp config-scan /path/to/mcp/config.json --analyzer-type llm --llm-model claude-3-5-sonnet-20241022
 
 # Specify custom output file
-securemcp config-scan --output custom-report.sarif.json
+./securemcp config-scan /path/to/mcp/config.json --output custom-report.sarif.json
 ```
 
 The configuration scanner will:
 1. Parse MCP server configuration files
 2. Analyze connection security (HTTP/HTTPS, TLS, authentication)
-3. Discover and analyze available tools from MCP servers
+3. Discover and analyze available tools from MCP servers using the selected analyzer
 4. Scan for exposed secrets in configuration files
 
 ### Repository Scan
@@ -92,13 +103,13 @@ Scan the codebase for security vulnerabilities:
 
 ```bash
 # Scan current directory
-securemcp repo-scan
+./securemcp repo-scan
 
 # Scan a specific repository
-securemcp repo-scan /path/to/repository
+./securemcp repo-scan /path/to/repository
 
 # Specify custom output file
-securemcp repo-scan --output custom-report.sarif.json
+./securemcp repo-scan --output custom-report.sarif.json
 ```
 
 The repository scanner will:
@@ -134,21 +145,60 @@ An example MCP Server is available in the `examples/mcp_server/` directory:
 
 ## Configuration
 
+### Tool Analysis Methods
+
+SecureMCP provides two methods for analyzing tool security:
+
+#### Token Analyzer (Default)
+
+The token analyzer uses rule-based pattern matching to quickly detect security issues in tool descriptions. It's fast, doesn't require API keys, and works offline.
+
+**Features:**
+- Fast, deterministic analysis
+- No external API dependencies
+- YAML-based rule configuration
+- Detects common security patterns:
+  - Command injection (`command_injection`)
+  - Unvalidated user input (`unvalidated_user_input`)
+  - Insecure permission assignments (`insecure_permission_assignment`)
+  - Active connection leaks (`active_connection_leak`)
+  - Information disclosure (`information_disclosure`)
+
+**Usage:**
+```bash
+securemcp config-scan --analyzer-type token
+```
+
+**Custom Rules:**
+Token analyzer rules are defined in `internal/configscan/tokenanalyzer/token_rules.yaml`. Each rule specifies:
+- Pattern matching criteria (tokens and phrases)
+- Severity level (low, medium, high, critical)
+- Security category and reason
+
+#### LLM Analyzer
+
+The LLM analyzer uses large language models for deep semantic analysis of tool descriptions, providing more comprehensive security insights.
+
+**Usage:**
+```bash
+securemcp config-scan --analyzer-type llm --llm-model <model-name>
+```
+
 ### Supported Models
 
 SecureMCP supports the following LLM providers for tool analysis:
 
 #### Anthropic (Claude)
-- Examples: `claude-3-5-sonnet-20241022`, `claude-3-opus-20240229`, `claude-3-5-haiku-20241022`
+- Examples: `claude-sonnet-4-5`
 - Requires: `LLM_API_KEY` environment variable
 
 #### OpenAI (GPT)
-- Examples: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`
+- Examples: `gpt-5`
 - Requires: `LLM_API_KEY` environment variable
 
 #### AWS Bedrock (Meta Llama)
 - Meta Llama inference profile ARNs starting with `arn:aws:bedrock:` and containing `llama`
-- Example: `arn:aws:bedrock:us-east-2:522814721969:inference-profile/us.meta.llama3-2-1b-instruct-v1:0`
+- Example: `arn:aws:bedrock:<region>:<account-id>:inference-profile/us.meta.llama3-2-1b-instruct-v1:0`
 - Requires: AWS credentials configured via AWS SDK (environment variables, IAM role, or credentials file)
 
 ### Environment Variables

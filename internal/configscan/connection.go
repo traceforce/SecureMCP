@@ -33,9 +33,11 @@ func (s *ConnectionScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 		return nil, err
 	}
 
+	fmt.Printf("Connection scanner scanning %d MCP servers\n", len(servers))
+
 	findings := []proto.Finding{}
 	for _, server := range servers {
-		fmt.Printf("MCP Server %+v\n", server.RawJSON)
+		fmt.Printf("Scanning MCP Server %+v\n", server.RawJSON)
 		classification := ClassifyTransport(server)
 		if classification == proto.MCPTransportType_MCP_TRANSPORT_TYPE_HTTP {
 			results, err := s.ScanConnection(ctx, server)
@@ -46,6 +48,7 @@ func (s *ConnectionScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 		}
 	}
 
+	fmt.Printf("Connection scanner found %d findings\n", len(findings))
 	// Return findings
 	return findings, nil
 }
@@ -152,7 +155,7 @@ func (s *ConnectionScanner) ScanConnection(ctx context.Context, cfg configparser
 	defer resp.Body.Close()
 
 	// Check TLS version
-	fmt.Printf("response %+v\n", resp.Header.Get("WWW-Authenticate"))
+	fmt.Printf("Response authentication header: %+v\n", resp.Header.Get("WWW-Authenticate"))
 	if resp.TLS != nil {
 		fmt.Printf("resp.TLS type: %T, value: %+v\n", resp.TLS, resp.TLS.Version)
 		if resp.TLS.Version < tls.VersionTLS13 {
