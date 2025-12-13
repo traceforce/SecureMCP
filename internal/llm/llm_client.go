@@ -26,8 +26,8 @@ type LLMClient struct {
 }
 
 const (
-	MAX_TOKENS_ANTHROPIC = 6400
-	MAX_TOKENS_OPENAI    = 6400
+	MAX_TOKENS_ANTHROPIC = 12000
+	MAX_TOKENS_OPENAI    = 12000
 	MAX_TOKENS_AWS       = 2048
 )
 
@@ -45,16 +45,16 @@ func NewLLMClientFromEnvWithModel(model string, timeout time.Duration) (*LLMClie
 	var chatClient ChatClient
 	if strings.HasPrefix(strings.ToLower(model), "claude-") {
 		llmType = LLM_TYPE_ANTHROPIC
-		apiKey := os.Getenv("LLM_API_KEY")
+		apiKey := os.Getenv("ANTHROPIC_API_KEY")
 		if apiKey == "" {
-			return nil, errors.New("To use Anthropic models, the Environment variable LLM_API_KEY is required")
+			return nil, errors.New("To use Anthropic models, the Environment variable ANTHROPIC_API_KEY is required")
 		}
 		chatClient = NewAnthropicClient(apiKey, model)
 	} else if strings.HasPrefix(strings.ToLower(model), "gpt-") {
 		llmType = LLM_TYPE_OPENAI
-		apiKey := os.Getenv("LLM_API_KEY")
+		apiKey := os.Getenv("OPENAI_API_KEY")
 		if apiKey == "" {
-			return nil, errors.New("To use OpenAI models, the Environment variable LLM_API_KEY is required")
+			return nil, errors.New("To use OpenAI models, the Environment variable OPENAI_API_KEY is required")
 		}
 		chatClient = NewOpenAIClient(apiKey, model)
 	} else if strings.HasPrefix(strings.ToLower(model), "arn:aws:bedrock:") && strings.Contains(strings.ToLower(model), "llama") {

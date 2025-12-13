@@ -18,12 +18,11 @@ const (
 	LLM_TYPE_BEDROCK   = 3
 )
 
-// Batch size map: maps LLM type to batch size
-// 10 for Anthropic and OpenAI, 5 for Bedrock because the response limit is much smaller
-var batchSizeMap = map[int]int{
-	llm.LLM_TYPE_ANTHROPIC: 10,
-	llm.LLM_TYPE_OPENAI:    10,
-	llm.LLM_TYPE_AWS:       5, // Bedrock uses LLM_TYPE_AWS
+// Batch size map: maps LLM type to max batch size bytes based on MAX_TOKENS constants
+var maxBatchSizeBytesMap = map[int]int{
+	llm.LLM_TYPE_ANTHROPIC: llm.MAX_TOKENS_ANTHROPIC,
+	llm.LLM_TYPE_OPENAI:    llm.MAX_TOKENS_OPENAI,
+	llm.LLM_TYPE_AWS:       llm.MAX_TOKENS_AWS,
 }
 
 // LLMAnalyzer analyzes MCP tools for security risks using an LLM
@@ -46,13 +45,12 @@ func NewLLMAnalyzerFromEnvWithModel(model string) (*LLMAnalyzer, error) {
 
 // SecurityFinding represents a security finding from LLM analysis
 type SecurityFinding struct {
-	ToolName        string `json:"tool_name,omitempty"`        // Required for batch analysis
-	ToolDescription string `json:"tool_description,omitempty"` // Required for batch analysis
-	Severity        string `json:"severity"`                   // "low", "medium", "high", "critical"
-	RuleID          string `json:"rule_id"`
-	Title           string `json:"title"`
-	Message         string `json:"message"`
-	Category        string `json:"category,omitempty"` // e.g., "command_injection", "path_traversal", etc.
+	ToolName string `json:"tool_name,omitempty"` // Required for batch analysis
+	Severity string `json:"severity"`            // "low", "medium", "high", "critical"
+	RuleID   string `json:"rule_id"`
+	Title    string `json:"title"`
+	Message  string `json:"message"`
+	Category string `json:"category,omitempty"` // e.g., "command_injection", "path_traversal", etc.
 }
 
 // AnalyzeTools analyzes multiple tools for security risks in a single LLM call
@@ -61,23 +59,43 @@ func (a *LLMAnalyzer) AnalyzeTools(ctx context.Context, tools []Tool, mcpServerN
 		return []proto.Finding{}, nil
 	}
 
-	// Get batch size based on LLM type
+	var allFindings []proto.Finding
+
+	// Get max batch size bytes based on LLM type
 	llmType := a.llmClient.GetType()
-	batchSize, ok := batchSizeMap[llmType]
+	maxBatchSizeBytes, ok := maxBatchSizeBytesMap[llmType]
 	if !ok {
 		return nil, fmt.Errorf("unsupported LLM type: %d", llmType)
 	}
 
-	var allFindings []proto.Finding
+	// Batch tools based on size (name + description) until reaching maxBatchSizeBytes
+	i := 0
+	for i < len(tools) {
+		var batch []Tool
+		currentBatchSize := 0
+		startIdx := i
+		endIdx := startIdx
 
-	for i := 0; i < len(tools); i += batchSize {
-		end := i + batchSize
-		if end > len(tools) {
-			end = len(tools)
+		// Add tools until we reach the size limit
+		for j := startIdx; j < len(tools); j++ {
+			tool := tools[j]
+			toolSize := len(tool.Name) + len(tool.Description)
+			fmt.Printf("Tool %d: %s (%d bytes)\n", j+1, tool.Name, toolSize)
+
+			// If adding this tool would exceed the limit and we already have tools in the batch, stop
+			// Always add at least one tool, even if it exceeds the limit
+			if len(batch) > 0 && currentBatchSize+toolSize > maxBatchSizeBytes {
+				break
+			}
+
+			batch = append(batch, tool)
+			currentBatchSize += toolSize
+			endIdx = j
 		}
-		batch := tools[i:end]
+		i = endIdx + 1
 
-		fmt.Printf("Analyzing batch %d-%d of %d tools for server %s\n", i+1, end, len(tools), mcpServerName)
+		fmt.Printf("Analyzing batch %d-%d of %d tools for server %s (batch size: %d tools, %d bytes)\n",
+			startIdx+1, endIdx+1, len(tools), mcpServerName, len(batch), currentBatchSize)
 		// Build the prompt for batch LLM analysis
 		prompt := a.buildBatchAnalysisPrompt(batch)
 
@@ -114,7 +132,6 @@ func (a *LLMAnalyzer) buildBatchAnalysisPrompt(tools []Tool) string {
 
 Return a JSON object with a "results" field containing an array of security findings. Each finding should have:
 - tool_name: The name of the tool this finding applies to. It should be an exact match to the tool name in the tools list.
-- tool_description: The description of the tool this finding applies to. It should be an exact match to the tool description in the tools list.
 - severity: "low", "medium", "high", or "critical"
 - rule_id: A unique identifier for the type of risk (e.g., "command_injection", "path_traversal")
 - title: A brief title describing the risk
@@ -228,7 +245,7 @@ func (a *LLMAnalyzer) parseBatchLLMResponse(response string, tools []Tool, mcpSe
 			McpServerName: mcpServerName,
 			McpToolName:   targetTool.Name,
 			File:          configPath,
-			Message:       f.Message + " Original tool description: " + f.ToolDescription,
+			Message:       f.Message + " Original tool description: " + toolMap[targetTool.Name].Description,
 		})
 	}
 

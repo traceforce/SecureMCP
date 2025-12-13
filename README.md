@@ -183,11 +183,11 @@ SecureMCP supports the following LLM providers for tool analysis:
 
 #### Anthropic (Claude)
 - Examples: `claude-sonnet-4-5`
-- Requires: `LLM_API_KEY` environment variable
+- Requires: `ANTHROPIC_API_KEY` environment variable
 
 #### OpenAI (GPT)
 - Examples: `gpt-5`
-- Requires: `LLM_API_KEY` environment variable
+- Requires: `OPENAI_API_KEY` environment variable
 
 #### AWS Bedrock (Meta Llama)
 - Meta Llama inference profile ARNs starting with `arn:aws:bedrock:` and containing `llama`

@@ -348,41 +348,6 @@ func startRedirectServer(codeCh chan<- string, errCh chan<- string) {
 	_ = srv.Serve(ln) // serve one callback, then main exits
 }
 
-// ---------- MCP calls ----------
-
-func (o *OAuthConfig) mcpCall(c *http.Client, accessToken, method string, params map[string]any, id int) map[string]any {
-	payload := map[string]any{
-		"jsonrpc": "2.0",
-		"id":      id,
-		"method":  method,
-		"params":  params,
-	}
-	b, _ := json.Marshal(payload)
-
-	req, _ := http.NewRequest("POST", o.MCPUrl, strings.NewReader(string(b)))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("MCP-Protocol-Version", ProtocolVersion)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-
-	resp, err := c.Do(req)
-	if err != nil {
-		log.Fatalf("MCP call failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode/100 != 2 {
-		body, _ := io.ReadAll(resp.Body)
-		log.Fatalf("MCP call failed: %s %s", resp.Status, string(body))
-	}
-
-	var out map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		log.Fatalf("MCP decode failed: %v", err)
-	}
-	return out
-}
-
 // ---------- utilities ----------
 
 func (o *OAuthConfig) parseWWWAuthenticate(h string) map[string]string {
@@ -418,11 +383,6 @@ func randB64URL(n int) string {
 
 func b64url(b []byte) string {
 	return strings.TrimRight(base64.URLEncoding.EncodeToString(b), "=")
-}
-
-func prettyJSON(v any) string {
-	b, _ := json.MarshalIndent(v, "", "  ")
-	return string(b)
 }
 
 func openBrowser(u string) {

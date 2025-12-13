@@ -68,9 +68,9 @@ func (c *OpenAIClient) Chat(ctx context.Context, systemPrompt string, messages [
 	}
 
 	resp, err := c.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Model:     shared.ChatModel(c.model),
-		Messages:  msgParams,
-		MaxTokens: openai.Int(MAX_TOKENS_OPENAI),
+		Model:               shared.ChatModel(c.model),
+		Messages:            msgParams,
+		MaxCompletionTokens: openai.Int(MAX_TOKENS_OPENAI),
 	})
 	if err != nil {
 		return "", err
