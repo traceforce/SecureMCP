@@ -1,1 +1,4 @@
-* @xia-traceforce
+# Example: make repo-owners the default reviewers for everything
+* @traceforce/securemcp-reviewers
+
+
