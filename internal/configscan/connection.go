@@ -129,13 +129,17 @@ func (s *ConnectionScanner) ScanConnection(ctx context.Context, cfg configparser
 		return findings, err
 	}
 
-	// If the certificate check passes, perform TLS version checks.
+	// If the certificate check passes, perform TLS version checks in order of highest to lowest severity.
 	for _, tlsVersion := range []uint16{tls.VersionTLS11, tls.VersionTLS12, tls.VersionTLS13} {
 		findings, err := s.checkTLSVersion(tlsVersion, cfg)
 		if err != nil {
 			return allFindings, err
 		}
-		allFindings = append(allFindings, findings...)
+		if len(findings) > 0 {
+			// Report the first finding to reduce redundancy.
+			allFindings = append(allFindings, findings...)
+			break
+		}
 	}
 
 	// Detect the authentication method used by the MCP server.
@@ -155,7 +159,7 @@ func (s *ConnectionScanner) checkCertificate(cfg configparser.MCPServerConfig) (
 	}
 	urlStr := *cfg.URL
 
-	// Create custom transport for Connection checks. Force the TLS version to the specified version.
+	// Create custom transport for Connection checks. Force the TLS version to the specified versions.
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			MinVersion: tls.VersionTLS11,
@@ -164,7 +168,7 @@ func (s *ConnectionScanner) checkCertificate(cfg configparser.MCPServerConfig) (
 	}
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   10 * time.Second,
+		Timeout:   30 * time.Second,
 	}
 
 	// Make request to check Connection
@@ -190,7 +194,7 @@ func (s *ConnectionScanner) checkCertificate(cfg configparser.MCPServerConfig) (
 					Tool:          "connection-scanner",
 					Type:          proto.FindingType_FINDING_TYPE_CONNECTION,
 					Severity:      proto.RiskSeverity_RISK_SEVERITY_CRITICAL,
-					RuleId:        "connenction-failed-no-response",
+					RuleId:        "connection-failed-no-response",
 					Title:         "Connection failed - no response",
 					McpServerName: cfg.Name,
 					File:          s.MCPconfigPath,
@@ -242,7 +246,7 @@ func (s *ConnectionScanner) checkTLSVersion(tlsVersion uint16, cfg configparser.
 	}
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   10 * time.Second,
+		Timeout:   30 * time.Second,
 	}
 
 	// Make request to check Connection
@@ -279,7 +283,7 @@ func (s *ConnectionScanner) checkTLSVersion(tlsVersion uint16, cfg configparser.
 				Tool:          "connection-scanner",
 				Type:          proto.FindingType_FINDING_TYPE_CONNECTION,
 				Severity:      proto.RiskSeverity_RISK_SEVERITY_MEDIUM,
-				RuleId:        "tls-version-below-1.3",
+				RuleId:        "tls-version-1.2-detected",
 				Title:         "TLS version 1.3 or higher is recommended",
 				McpServerName: cfg.Name,
 				File:          s.MCPconfigPath,
@@ -289,12 +293,12 @@ func (s *ConnectionScanner) checkTLSVersion(tlsVersion uint16, cfg configparser.
 			findings = append(findings, proto.Finding{
 				Tool:          "connection-scanner",
 				Type:          proto.FindingType_FINDING_TYPE_CONNECTION,
-				Severity:      proto.RiskSeverity_RISK_SEVERITY_HIGH,
-				RuleId:        "tls-version-below-1.2",
-				Title:         "TLS version 1.2 or higher is recommended",
+				Severity:      proto.RiskSeverity_RISK_SEVERITY_CRITICAL,
+				RuleId:        "tls-version-1.1-detected",
+				Title:         "TLS versions less than or equal to 1.1 have critical security vulnerabilities",
 				McpServerName: cfg.Name,
 				File:          s.MCPconfigPath,
-				Message:       fmt.Sprintf("The MCP server '%s' at %s accepts a TLS version below 1.2, which is considered insecure. TLS versions below 1.2 are vulnerable to various attacks and should not be used. Please upgrade to TLS 1.2 or higher immediately.", cfg.Name, urlStr),
+				Message:       fmt.Sprintf("The MCP server '%s' at %s accepts a TLS version less than or equal to 1.1. These versions are vulnerable to various attacks and should not be used. Please upgrade to TLS 1.3 or higher immediately.", cfg.Name, urlStr),
 			})
 		}
 	}
@@ -317,25 +321,11 @@ func (s *ConnectionScanner) detectIdentityControl(cfg configparser.MCPServerConf
 
 	switch resp.StatusCode {
 	case http.StatusUnauthorized:
-		wwwAuthenticateKey := "WWW-Authenticate"
-		authHeader := resp.Header.Get(wwwAuthenticateKey)
-
-		fmt.Printf("authHeader: %s\n", authHeader)
-
-		if authHeader != "" && strings.Contains(strings.ToLower(authHeader), "oauth") {
-			return []proto.Finding{
-				{
-					Tool:          "connection-scanner",
-					Type:          proto.FindingType_FINDING_TYPE_CONNECTION,
-					Severity:      proto.RiskSeverity_RISK_SEVERITY_LOW,
-					RuleId:        "oauth-authentication",
-					Title:         "OAuth authentication detected",
-					McpServerName: cfg.Name,
-					File:          s.MCPconfigPath,
-					Message:       fmt.Sprintf("The MCP server '%s' is using OAuth authentication. Make sure its scope is limited to the minimum required for the MCP server to function properly.", cfg.Name),
-				},
-			}, nil
+		findings, err := s.checkOauthFlow(cfg)
+		if err != nil {
+			return nil, err
 		}
+		return findings, nil
 	case http.StatusOK:
 		return []proto.Finding{
 			{
@@ -353,6 +343,70 @@ func (s *ConnectionScanner) detectIdentityControl(cfg configparser.MCPServerConf
 		// Do not report findings if we cannot find anything definitive.
 		return []proto.Finding{}, nil
 	}
+}
 
-	return []proto.Finding{}, nil
+func (s *ConnectionScanner) checkOauthFlow(cfg configparser.MCPServerConfig) ([]proto.Finding, error) {
+	oauthConfig := NewOAuthConfig(*cfg.URL)
+
+	fmt.Println("1) Checking Protected Resource Metadata (PRM) is properly configured")
+	prm, err := oauthConfig.discoverPRM()
+	if err != nil {
+		return []proto.Finding{
+			{
+				Tool:          "connection-scanner",
+				Type:          proto.FindingType_FINDING_TYPE_CONNECTION,
+				Severity:      proto.RiskSeverity_RISK_SEVERITY_HIGH,
+				RuleId:        "oauth-prm-not-configured",
+				Title:         "OAuth PRM not configured",
+				McpServerName: cfg.Name,
+				File:          s.MCPconfigPath,
+				Message:       fmt.Sprintf("The MCP server '%s' is not using Protected Resource Metadata (PRM) for OAuth authentication. Oauth is the recommended authentication method for MCP servers. PRM is required to let clients automatically start the OAuth token exchange flow.", cfg.Name),
+			},
+		}, nil
+	}
+
+	fmt.Println("2) Discovering Authorization Server Metadata…")
+	asmd, err := oauthConfig.discoverASMetadata(prm)
+	if err != nil {
+		return []proto.Finding{
+			{
+				Tool:          "connection-scanner",
+				Type:          proto.FindingType_FINDING_TYPE_CONNECTION,
+				Severity:      proto.RiskSeverity_RISK_SEVERITY_HIGH,
+				RuleId:        "oauth-asmd-not-configured",
+				Title:         "OAuth ASMD not configured",
+				McpServerName: cfg.Name,
+				File:          s.MCPconfigPath,
+				Message:       fmt.Sprintf("The MCP server '%s' is not using Authorization Server Metadata (ASMD) for OAuth authentication. ASMD is required to let clients automatically discover an OAuth/OIDC server'sendpoints, supported flows, and security capabilities.", cfg.Name),
+			},
+		}, nil
+	}
+
+	if len(asmd.ScopesSupported) == 0 && len(prm.ScopesSupported) == 0 {
+		return []proto.Finding{
+			{
+				Tool:          "connection-scanner",
+				Type:          proto.FindingType_FINDING_TYPE_CONNECTION,
+				Severity:      proto.RiskSeverity_RISK_SEVERITY_HIGH,
+				RuleId:        "oauth-scopes-not-configured",
+				Title:         "OAuth scopes not configured",
+				McpServerName: cfg.Name,
+				File:          s.MCPconfigPath,
+				Message:       fmt.Sprintf("The MCP server '%s' is not using OAuth scopes for authentication. Without scopes, the MCP server cannot provide fine-grained access control to the resources it provides.", cfg.Name),
+			},
+		}, nil
+	}
+
+	return []proto.Finding{
+		{
+			Tool:          "connection-scanner",
+			Type:          proto.FindingType_FINDING_TYPE_CONNECTION,
+			Severity:      proto.RiskSeverity_RISK_SEVERITY_LOW,
+			RuleId:        "oauth-flow-detected",
+			Title:         "OAuth flow detected with valid PRM, ASMD endpoints and scopes",
+			McpServerName: cfg.Name,
+			File:          s.MCPconfigPath,
+			Message:       fmt.Sprintf("The remote MCP server “%s” is configured to use OAuth authentication and exposes valid Protected Resource Metadata (PRM) and Authorization Server Metadata (ASMD) endpoints. Ensure that OAuth scopes are restricted to the minimum set required for the MCP server's intended functionality, following the principle of least privilege.", cfg.Name),
+		},
+	}, nil
 }
