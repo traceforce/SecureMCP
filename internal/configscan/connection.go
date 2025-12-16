@@ -334,6 +334,8 @@ func (s *ConnectionScanner) detectIdentityControl(cfg configparser.MCPServerConf
 	}
 	defer resp.Body.Close()
 
+	fmt.Printf("Response status code: %d\n", resp.StatusCode)
+
 	switch resp.StatusCode {
 	case http.StatusUnauthorized:
 		findings, err := s.checkOauthFlow(cfg)
@@ -356,7 +358,18 @@ func (s *ConnectionScanner) detectIdentityControl(cfg configparser.MCPServerConf
 		}, nil
 	default:
 		// Do not report findings if we cannot find anything definitive.
-		return []proto.Finding{}, nil
+		return []proto.Finding{
+			{
+				Tool:          "connection-scanner",
+				Type:          proto.FindingType_FINDING_TYPE_CONNECTION,
+				Severity:      proto.RiskSeverity_RISK_SEVERITY_HIGH,
+				RuleId:        "unexpected-status-code",
+				Title:         "Unexpected status code detected",
+				McpServerName: cfg.Name,
+				File:          s.MCPconfigPath,
+				Message:       fmt.Sprintf("The MCP server '%s' returned an unexpected status code on connection check: %d. This usually indicates a problem with the MCP server configuration or the MCP server implementation.", cfg.Name, resp.StatusCode),
+			},
+		}, nil
 	}
 }
 
