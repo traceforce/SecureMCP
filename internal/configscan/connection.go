@@ -3,6 +3,8 @@ package configscan
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -80,37 +82,45 @@ func isLocalhostOrLoopback(urlStr string) bool {
 		return false
 	}
 
-	// Check for localhost
-	if host == "localhost" {
+	return isLoopbackHost(host)
+}
+
+// isLoopbackHost returns true for localhost/127.x.x.x/[::1] and common loopback cases.
+// Handles Docker hosts, .localhost domains, and unspecified addresses.
+func isLoopbackHost(h string) bool {
+	h = strings.ToLower(h)
+	if h == "localhost" || h == "ip6-localhost" || h == "host.docker.internal" || h == "gateway.docker.internal" {
 		return true
 	}
-
-	// Check for IPv4 loopback (127.0.0.x)
-	if strings.HasPrefix(host, "127.0.0.") {
+	if strings.HasSuffix(h, ".localhost") {
 		return true
 	}
-
-	// Check for exact IPv4 loopback
-	if host == "127.0.0.1" {
+	if ip := net.ParseIP(h); ip != nil && (ip.IsLoopback() || ip.IsUnspecified()) {
 		return true
 	}
-
-	// Check for IPv6 loopback
-	if host == "::1" || host == "[::1]" {
-		return true
-	}
-
-	// Check if hostname resolves to loopback
-	ips, err := net.LookupIP(host)
-	if err == nil {
-		for _, ip := range ips {
-			if ip.IsLoopback() {
-				return true
-			}
-		}
-	}
-
 	return false
+}
+
+// isCertificateError checks if error is a TLS certificate validation error
+func isCertificateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	
+	// Check for x509 certificate errors (remote cert problems, not local system issues)
+	var x509UnknownAuthErr x509.UnknownAuthorityError
+	var x509CertInvalidErr x509.CertificateInvalidError
+	var x509HostnameErr x509.HostnameError
+	var x509InsecureAlgErr x509.InsecureAlgorithmError
+	var x509ConstraintErr x509.ConstraintViolationError
+	var x509UnhandledExtErr x509.UnhandledCriticalExtension
+	
+	return errors.As(err, &x509UnknownAuthErr) ||
+		errors.As(err, &x509CertInvalidErr) ||
+		errors.As(err, &x509HostnameErr) ||
+		errors.As(err, &x509InsecureAlgErr) ||
+		errors.As(err, &x509ConstraintErr) ||
+		errors.As(err, &x509UnhandledExtErr)
 }
 
 func (s *ConnectionScanner) ScanConnection(ctx context.Context, cfg configparser.MCPServerConfig) ([]proto.Finding, error) {
@@ -139,12 +149,14 @@ func (s *ConnectionScanner) ScanConnection(ctx context.Context, cfg configparser
 
 	// Perform certificate checks. All errors found are critical findings.
 	findings, err := s.checkCertificate(cfg)
-	if len(findings) > 0 || err != nil {
-		// If certficate check fails, there's no need to perform further checks.
-		return findings, err
+	if err != nil {
+		return allFindings, err
 	}
+	allFindings = append(allFindings, findings...)
 
-	// If the certificate check passes, perform TLS version checks in order of highest to lowest severity.
+	// Always perform TLS version checks regardless of certificate status.
+	// TLS version can still be determined even when certificate is invalid because
+	// checkTLSVersion uses InsecureSkipVerify to test protocol support independently.
 	for _, tlsVersion := range []uint16{tls.VersionTLS11, tls.VersionTLS12, tls.VersionTLS13} {
 		findings, err := s.checkTLSVersion(tlsVersion, cfg)
 		if err != nil {
@@ -190,17 +202,17 @@ func (s *ConnectionScanner) checkCertificate(cfg configparser.MCPServerConfig) (
 	resp, err := client.Get(urlStr)
 	if err != nil {
 		fmt.Printf("Http error: %s, response: %+v\n", err.Error(), resp)
-		if strings.Contains(strings.ToLower(err.Error()), "certificate") {
+		if isCertificateError(err) {
 			return []proto.Finding{
 				{
 					Tool:          "connection-scanner",
 					Type:          proto.FindingType_FINDING_TYPE_CONNECTION,
 					Severity:      proto.RiskSeverity_RISK_SEVERITY_CRITICAL,
 					RuleId:        "invalid-certificate",
-					Title:         "Invalid Connection certificate",
+					Title:         "Invalid TLS certificate",
 					McpServerName: cfg.Name,
 					File:          s.MCPconfigPath,
-					Message:       fmt.Sprintf("The MCP server '%s' is configured with an invalid or untrusted TLS certificate. Connection to %s failed with certificate error: %s. This may indicate a man-in-the-middle attack or misconfigured server.", cfg.Name, urlStr, err.Error()),
+					Message:       fmt.Sprintf("The MCP server '%s' has an invalid or untrusted TLS certificate. Connection to %s failed with certificate error: %s.", cfg.Name, urlStr, err.Error()),
 				},
 			}, nil
 		} else if resp == nil {
@@ -255,8 +267,9 @@ func (s *ConnectionScanner) checkTLSVersion(tlsVersion uint16, cfg configparser.
 	// Create custom transport for Connection checks. Force the TLS version to the specified version.
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			MinVersion: tlsVersion,
-			MaxVersion: tlsVersion,
+			MinVersion:         tlsVersion,
+			MaxVersion:         tlsVersion,
+			InsecureSkipVerify: true, // Skip cert validation - we're testing protocol support, not cert validity
 		},
 	}
 	client := &http.Client{
