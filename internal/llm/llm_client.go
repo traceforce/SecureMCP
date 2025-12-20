@@ -137,8 +137,25 @@ func (c *LLMClient) stripMarkdownCodeFences(content string) string {
 func (c *LLMClient) isYAMLContent(content string) bool {
 	// Remove markdown code fences for detection
 	trimmed := content
-	trimmed = strings.TrimPrefix(trimmed, "ml")
+	trimmed = strings.TrimPrefix(trimmed, "```yaml")
+	trimmed = strings.TrimPrefix(trimmed, "```yml")
 	trimmed = strings.TrimPrefix(trimmed, "```")
+	trimmed = strings.TrimSpace(trimmed)
+
+	// Handle case where "yaml" or "yml" appears on its own line
+	if strings.HasPrefix(trimmed, "yaml\n") {
+		trimmed = strings.TrimPrefix(trimmed, "yaml\n")
+	} else if strings.HasPrefix(trimmed, "yaml\r\n") {
+		trimmed = strings.TrimPrefix(trimmed, "yaml\r\n")
+	} else if strings.HasPrefix(trimmed, "yml\n") {
+		trimmed = strings.TrimPrefix(trimmed, "yml\n")
+	} else if strings.HasPrefix(trimmed, "yml\r\n") {
+		trimmed = strings.TrimPrefix(trimmed, "yml\r\n")
+	} else if strings.HasPrefix(trimmed, "json\n") {
+		trimmed = strings.TrimPrefix(trimmed, "json\n")
+	} else if strings.HasPrefix(trimmed, "json\r\n") {
+		trimmed = strings.TrimPrefix(trimmed, "json\r\n")
+	}
 	trimmed = strings.TrimSpace(trimmed)
 
 	// Check for YAML indicators
@@ -154,9 +171,26 @@ func (c *LLMClient) isYAMLContent(content string) bool {
 func (c *LLMClient) stripYAMLCodeFences(content string) string {
 	content = strings.TrimSpace(content)
 
-	// Remove opening code fences (with or without language specifier)
-	content = strings.TrimPrefix(content, "ml")
+	// Remove opening code fences with language specifier (```yaml or ```yml)
+	content = strings.TrimPrefix(content, "```yaml")
+	content = strings.TrimPrefix(content, "```yml")
 	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSpace(content)
+
+	// Handle case where "yaml" or "yml" appears on its own line (without backticks)
+	// This can happen when LLM generates just the language identifier
+	if strings.HasPrefix(content, "yaml\n") {
+		content = strings.TrimPrefix(content, "yaml\n")
+	} else if strings.HasPrefix(content, "yaml\r\n") {
+		content = strings.TrimPrefix(content, "yaml\r\n")
+	} else if strings.HasPrefix(content, "yml\n") {
+		content = strings.TrimPrefix(content, "yml\n")
+	} else if strings.HasPrefix(content, "yml\r\n") {
+		content = strings.TrimPrefix(content, "yml\r\n")
+	} else if content == "yaml" {
+		// If content is just "yaml", return empty (shouldn't happen but handle it)
+		return ""
+	}
 	content = strings.TrimSpace(content)
 
 	// Remove closing code fences (handle multiple cases)

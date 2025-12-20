@@ -21,6 +21,7 @@ enum FindingType {
   FINDING_TYPE_SECRETS = 3;  // Secret detection
   FINDING_TYPE_SCA = 4;      // Software Composition Analysis
   FINDING_TYPE_SAST = 5;     // Static Application Security Testing
+  FINDING_TYPE_PENTEST = 6;  // Pentest analysis
 }
 
 // Finding represents a security finding from a scan

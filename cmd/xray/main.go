@@ -198,11 +198,12 @@ func NewRepoScanCommand() *cobra.Command {
 func NewPentestCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pentest <config-file>",
-		Short: "Run a pentest against the specified URL using the MCP servers in the configuration file",
+		Short: "Run a pentest against the MCP servers defined in the configuration file",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			configPath := args[0]
 			llmModel, _ := cmd.Flags().GetString("llm-model")
+			testPlanFile, _ := cmd.Flags().GetString("test-plan")
 
 			// Validate that configPath is a file, not a directory
 			fileInfo, err := os.Stat(configPath)
@@ -219,9 +220,26 @@ func NewPentestCommand() *cobra.Command {
 				os.Exit(1)
 			}
 
-			// Validate LLM model
-			if llmModel == "" {
-				fmt.Println("Error: llm-model is required")
+			// Validate test plan file if provided
+			if testPlanFile != "" {
+				testPlanInfo, err := os.Stat(testPlanFile)
+				if err != nil {
+					if os.IsNotExist(err) {
+						fmt.Printf("Error: test plan file does not exist: %s\n", testPlanFile)
+					} else {
+						fmt.Printf("Error: cannot access test plan file: %s\n", err)
+					}
+					os.Exit(1)
+				}
+				if testPlanInfo.IsDir() {
+					fmt.Printf("Error: test plan path must be a file, not a directory: %s\n", testPlanFile)
+					os.Exit(1)
+				}
+			}
+
+			// Validate LLM model (only required if test plan is not provided)
+			if testPlanFile == "" && llmModel == "" {
+				fmt.Println("Error: llm-model is required when test-plan is not provided")
 				os.Exit(1)
 			}
 
@@ -234,7 +252,7 @@ func NewPentestCommand() *cobra.Command {
 
 			// Run pentest
 			ctx := context.Background()
-			findings, err := pentestTool.Pentest(ctx)
+			findings, err := pentestTool.Pentest(ctx, testPlanFile)
 			if err != nil {
 				fmt.Printf("Error running pentest: %v\n", err)
 				os.Exit(1)
@@ -248,7 +266,8 @@ func NewPentestCommand() *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().String("llm-model", "", "LLM model to use for pentest plan generation (required)")
+	cmd.Flags().String("llm-model", "", "LLM model to use for pentest plan generation (required if test-plan is not provided)")
+	cmd.Flags().String("test-plan", "", "Optional input test YAML file to use instead of generating a plan")
 	cmd.Flags().StringP("output", "o", "", "Output file path for SARIF report (default: findings_<timestamp>.sarif.json)")
 
 	return cmd
