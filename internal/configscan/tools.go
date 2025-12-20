@@ -11,10 +11,12 @@ import (
 	"mcpxray/internal/libmcp"
 	"mcpxray/internal/llm"
 	"mcpxray/proto"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type ToolsAnalyzer interface {
-	AnalyzeTools(ctx context.Context, tools []libmcp.Tool, mcpServerName string, configPath string) ([]proto.Finding, error)
+	AnalyzeTools(ctx context.Context, tools []*mcp.Tool, mcpServerName string, configPath string) ([]proto.Finding, error)
 }
 
 type ToolsScanner struct {
@@ -62,14 +64,20 @@ func (s *ToolsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 	var allFindings []proto.Finding
 	var serverToolsData []libmcp.ServerToolsData
 
+	// Add 60 seconds context timeout
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
 	for _, server := range servers {
-		session, err := libmcp.NewMCPSession(ctx, server)
+		session, err := libmcp.NewSDKSession(ctx, server)
 		if err != nil {
 			return nil, err
 		}
 		defer session.Close()
 
-		tools, err := libmcp.GetTools(ctx, session)
+		fmt.Printf("Listing tools for server %s\n", server.Name)
+
+		listToolsResult, err := session.Session.ListTools(ctx, &mcp.ListToolsParams{})
 		if err != nil {
 			// If the error is a 401 Unauthorized error, report a medium severity finding
 			// and suggest the user to check the OAuth scopes.
@@ -89,17 +97,17 @@ func (s *ToolsScanner) Scan(ctx context.Context) ([]proto.Finding, error) {
 			return nil, err
 		}
 
-		// Collect tools data for JSON output (even if empty)
-		serverToolsData = append(serverToolsData, libmcp.ServerToolsData{
-			Server: server.Name,
-			Tools:  tools,
-		})
-
-		if len(tools) == 0 {
+		if len(listToolsResult.Tools) == 0 {
 			continue
 		}
 
-		findings, err := s.toolsAnalyzer.AnalyzeTools(ctx, tools, server.Name, s.MCPconfigPath)
+		// Collect tools data for JSON output (even if empty)
+		serverToolsData = append(serverToolsData, libmcp.ServerToolsData{
+			Server: server.Name,
+			Tools:  listToolsResult.Tools,
+		})
+
+		findings, err := s.toolsAnalyzer.AnalyzeTools(ctx, listToolsResult.Tools, server.Name, s.MCPconfigPath)
 		if err != nil {
 			return nil, err
 		}

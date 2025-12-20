@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"mcpxray/internal/libmcp"
 	"mcpxray/internal/llm"
 	"mcpxray/proto"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -50,7 +51,7 @@ type SecurityFinding struct {
 }
 
 // AnalyzeTools analyzes multiple tools for security risks in a single LLM call
-func (a *LLMAnalyzer) AnalyzeTools(ctx context.Context, tools []libmcp.Tool, mcpServerName string, configPath string) ([]proto.Finding, error) {
+func (a *LLMAnalyzer) AnalyzeTools(ctx context.Context, tools []*mcp.Tool, mcpServerName string, configPath string) ([]proto.Finding, error) {
 	if len(tools) == 0 {
 		return []proto.Finding{}, nil
 	}
@@ -67,7 +68,7 @@ func (a *LLMAnalyzer) AnalyzeTools(ctx context.Context, tools []libmcp.Tool, mcp
 	// Batch tools based on size (name + description) until reaching maxBatchSizeBytes
 	i := 0
 	for i < len(tools) {
-		var batch []libmcp.Tool
+		var batch []*mcp.Tool
 		currentBatchSize := 0
 		startIdx := i
 		endIdx := startIdx
@@ -114,7 +115,7 @@ func (a *LLMAnalyzer) AnalyzeTools(ctx context.Context, tools []libmcp.Tool, mcp
 }
 
 // buildBatchAnalysisPrompt creates a prompt for analyzing multiple tools
-func (a *LLMAnalyzer) buildBatchAnalysisPrompt(tools []libmcp.Tool) string {
+func (a *LLMAnalyzer) buildBatchAnalysisPrompt(tools []*mcp.Tool) string {
 	var toolsList strings.Builder
 	for i, tool := range tools {
 		toolsList.WriteString(fmt.Sprintf("\nTool %d:\n", i+1))
@@ -142,14 +143,14 @@ JSON Response:`, toolsList.String())
 }
 
 // parseBatchLLMResponse parses the batch LLM response and converts it to proto.Finding
-func (a *LLMAnalyzer) parseBatchLLMResponse(response string, tools []libmcp.Tool, mcpServerName string, configPath string) ([]proto.Finding, error) {
+func (a *LLMAnalyzer) parseBatchLLMResponse(response string, tools []*mcp.Tool, mcpServerName string, configPath string) ([]proto.Finding, error) {
 	// Validate response is not empty
 	if response == "" {
 		return nil, fmt.Errorf("LLM response is empty, cannot parse JSON")
 	}
 
 	// Create a map of tool names to tools for quick lookup
-	toolMap := make(map[string]libmcp.Tool)
+	toolMap := make(map[string]*mcp.Tool)
 	for _, tool := range tools {
 		toolMap[tool.Name] = tool
 	}
@@ -178,7 +179,7 @@ func (a *LLMAnalyzer) parseBatchLLMResponse(response string, tools []libmcp.Tool
 	protoFindings := make([]proto.Finding, 0, len(findings))
 	for _, f := range findings {
 		// Determine which tool this finding belongs to
-		var targetTool libmcp.Tool
+		var targetTool *mcp.Tool
 		if f.ToolName != "" {
 			// Finding explicitly specifies tool name
 			if tool, ok := toolMap[f.ToolName]; ok {

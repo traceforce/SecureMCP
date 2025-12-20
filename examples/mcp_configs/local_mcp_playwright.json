@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+      "playwright": {
+        "command": "npx",
+        "args": [
+          "@playwright/mcp@latest",
+          "--isolated",
+          "--storage-state={path/to/storage.json}"
+        ]
+      }
+    }
+  }

@@ -220,6 +220,8 @@ func findingTypeToString(findingType proto.FindingType) string {
 		return "TOOL_ANALYSIS"
 	case proto.FindingType_FINDING_TYPE_CONNECTION:
 		return "CONNECTION"
+	case proto.FindingType_FINDING_TYPE_PENTEST:
+		return "PENTEST"
 	default:
 		return "UNKNOWN"
 	}

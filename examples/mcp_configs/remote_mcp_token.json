@@ -1,8 +1,11 @@
 {
   "mcpServers": {
-    "composio": {
+    "asana test server": {
       "type": "http",
-      "url": "https://mcp.composio.dev/partner/composio/github?customerId=15d825a9-0355-4797-9890-ea7357c96285&transport=sse&agent=cursor" 
+      "url": "https://mcp.asana.com/mcp",
+      "headers": {
+        "Authorization": "Bearer 1212449093048364:qznICNkXrbemfsPl:ueTi00emOC30DkA7ZBbv4BZwxDmYtfFz"
+      }
     }
   }
 }
