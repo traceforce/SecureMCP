@@ -102,10 +102,10 @@ Return ONLY valid JSON, no markdown formatting, no code fences.`
 
 	// Print first 200 bytes for debugging
 	preview := content
-	if len(preview) > 200 {
-		preview = preview[:200] + "..."
+	if len(preview) > 1000 {
+		preview = preview[:1000] + "..."
 	}
-	fmt.Printf("LLM response (first 200 bytes): %s\n", preview)
+	fmt.Printf("LLM response (first 1000 bytes): \n%s\n", preview)
 
 	// Strip markdown code fences if present - handle various formats
 	content = c.stripMarkdownCodeFences(content)
