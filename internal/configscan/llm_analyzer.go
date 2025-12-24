@@ -97,7 +97,7 @@ func (a *LLMAnalyzer) AnalyzeTools(ctx context.Context, tools []*mcp.Tool, mcpSe
 		prompt := a.buildBatchAnalysisPrompt(batch)
 
 		// Call the LLM
-		response, err := a.llmClient.CallLLM(ctx, prompt)
+		response, err := a.llmClient.CallLLM(ctx, prompt, llm.OutputFormatJSON)
 		if err != nil {
 			return nil, fmt.Errorf("failed to call LLM: %w", err)
 		}
