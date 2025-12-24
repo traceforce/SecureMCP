@@ -19,6 +19,11 @@ const (
 	LLM_TYPE_AWS       = 3
 )
 
+const (
+	OutputFormatJSON = 0
+	OutputFormatYAML = 1
+)
+
 type LLMClient struct {
 	ChatClient ChatClient
 	llmType    int
@@ -82,11 +87,17 @@ func (c *LLMClient) GetType() int {
 }
 
 // callLLM calls the LLM API
-func (c *LLMClient) CallLLM(ctx context.Context, userPrompt string) (string, error) {
+func (c *LLMClient) CallLLM(ctx context.Context, userPrompt string, outputFormat int) (string, error) {
 	systemPrompt := `You are a security analyst specializing in analyzing API tools and schemas for security vulnerabilities. 
 Analyze the provided tool information and return a JSON array of security findings.
 Each finding must have: severity, rule_id, title, message, and optionally category.
 Return ONLY valid JSON, no markdown formatting, no code fences.`
+	if outputFormat == OutputFormatYAML {
+		systemPrompt = `You are a security analyst specializing in analyzing API tools and schemas for security vulnerabilities. 
+Analyze the provided tool information and return a YAML object of security findings.
+Each finding must have: severity, rule_id, title, message, and optionally category.
+Return ONLY valid YAML, no markdown formatting, no code fences.`
+	}
 
 	content, err := c.ChatClient.Chat(ctx, systemPrompt, []ChatMessage{
 		{Role: "user", Content: userPrompt},
@@ -107,8 +118,8 @@ Return ONLY valid JSON, no markdown formatting, no code fences.`
 	}
 	fmt.Printf("LLM response (first 1000 bytes): \n%s\n", preview)
 
-	// Strip markdown code fences if present - handle various formats
-	content = c.stripMarkdownCodeFences(content)
+	// Strip markdown code fences if present - use the specified format
+	content = c.stripMarkdownCodeFences(content, outputFormat)
 
 	// Check again after trimming
 	if content == "" {
@@ -119,51 +130,18 @@ Return ONLY valid JSON, no markdown formatting, no code fences.`
 }
 
 // stripMarkdownCodeFences removes markdown code fences from the content
-// Detects content type (JSON vs YAML) and calls the appropriate handler
-func (c *LLMClient) stripMarkdownCodeFences(content string) string {
+// Uses the specified outputFormat to determine which handler to use
+func (c *LLMClient) stripMarkdownCodeFences(content string, outputFormat int) string {
 	content = strings.TrimSpace(content)
 
-	// Detect content type
-	if c.isYAMLContent(content) {
+	// Use the specified format instead of auto-detection
+	if outputFormat == OutputFormatYAML {
 		fmt.Printf("Content is YAML\n")
 		return c.stripYAMLCodeFences(content)
 	}
 
 	fmt.Printf("Content is JSON\n")
 	return c.stripJSONCodeFences(content)
-}
-
-// isYAMLContent determines if the content is YAML based on common YAML patterns
-func (c *LLMClient) isYAMLContent(content string) bool {
-	// Remove markdown code fences for detection
-	trimmed := content
-	trimmed = strings.TrimPrefix(trimmed, "```yaml")
-	trimmed = strings.TrimPrefix(trimmed, "```yml")
-	trimmed = strings.TrimPrefix(trimmed, "```")
-	trimmed = strings.TrimSpace(trimmed)
-
-	// Handle case where "yaml" or "yml" appears on its own line
-	if strings.HasPrefix(trimmed, "yaml\n") {
-		trimmed = strings.TrimPrefix(trimmed, "yaml\n")
-	} else if strings.HasPrefix(trimmed, "yaml\r\n") {
-		trimmed = strings.TrimPrefix(trimmed, "yaml\r\n")
-	} else if strings.HasPrefix(trimmed, "yml\n") {
-		trimmed = strings.TrimPrefix(trimmed, "yml\n")
-	} else if strings.HasPrefix(trimmed, "yml\r\n") {
-		trimmed = strings.TrimPrefix(trimmed, "yml\r\n")
-	} else if strings.HasPrefix(trimmed, "json\n") {
-		trimmed = strings.TrimPrefix(trimmed, "json\n")
-	} else if strings.HasPrefix(trimmed, "json\r\n") {
-		trimmed = strings.TrimPrefix(trimmed, "json\r\n")
-	}
-	trimmed = strings.TrimSpace(trimmed)
-
-	// Check for YAML indicators
-	return strings.HasPrefix(trimmed, "metadata:") ||
-		strings.HasPrefix(trimmed, "tests:") ||
-		strings.HasPrefix(trimmed, "test_id:") ||
-		strings.HasPrefix(trimmed, "version:") ||
-		(strings.Contains(trimmed, ":\n") && !strings.HasPrefix(trimmed, "{"))
 }
 
 // stripYAMLCodeFences removes markdown code fences from YAML content

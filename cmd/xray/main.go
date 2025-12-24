@@ -238,7 +238,7 @@ func NewPentestCommand() *cobra.Command {
 			}
 
 			if llmModel == "" {
-				fmt.Println("Error: llm-model is required")
+				fmt.Println("Error: llm-model is required for pentest.")
 				os.Exit(1)
 			}
 
